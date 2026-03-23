@@ -29,6 +29,7 @@ export function executeStrategyPrivately(graph: NodeGraph): {
     maskedAmount: maskAmount(index + 1),
     timestamp: randomizeTimestamp(base, index), // PRIVATE — never log or transmit
     constraintsSatisfied: true,
+    witnessGenerated: false,
   }));
 
   const finalStateHash = `0x${Buffer.from(`${graph.nodes.length}:${graph.edges.length}:${base}`).toString("hex").slice(0, 62)}`;

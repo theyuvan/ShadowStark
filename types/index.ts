@@ -47,14 +47,68 @@ export interface ZKConstraint {
   constraintType: "range_check" | "sum_partition" | "state_transition" | "assertion";
   publicInputs: string[];
   privateWitness: string[]; // PRIVATE — never log or transmit
+  estimatedSize: number; // in bytes for cost estimation
+}
+
+export interface MerkleProof {
+  leaf: bigint;
+  pathElements: bigint[]; // PRIVATE
+  pathIndices: number[]; // PRIVATE
+  root: bigint; // PUBLIC
+  treeDepth: number;
+}
+
+export interface RangeProofWitness {
+  bits: bigint[]; // PRIVATE: bit decomposition
+  blindingFactor: bigint; // PRIVATE
+  publicCommitment: bigint; // PUBLIC: Poseidon(value, blinding)
+  lowerBound: bigint; // PRIVATE
+  upperBound: bigint; // PRIVATE
+}
+
+export interface NullifierData {
+  nullifier: bigint; // PUBLIC: stored on chain
+  spent: boolean; // PUBLIC: tracked in smart contract
+}
+
+export interface CircuitPublicInputs {
+  commitment: string;
+  finalStateHash: string;
+  nullifier: string;
+  merkleRoot: string;
+}
+
+export interface CircuitPrivateInputs {
+  strategyHash: string;
+  salt: string;
+  tradeAmount: string;
+  priceLower: string;
+  priceUpper: string;
+  executionSteps: string[];
+  merklePath: string[];
+  nullifierSecret: string;
 }
 
 export interface ZKProof {
   proofHash: string;
-  commitment: string;
-  finalStateHash: string;
-  publicInputs: string[];
+  commitment: string; // PUBLIC
+  finalStateHash: string; // PUBLIC
+  nullifier: string; // PUBLIC
+  merkleRoot: string; // PUBLIC
+  publicInputs: CircuitPublicInputs;
   verified: boolean;
+  constraintCount: number;
+  proofSize: number; // in bytes
+  timestamp: number;
+}
+
+export interface AggregatedProof {
+  aggregatedProofHash: string;
+  individualCommitments: string[];
+  finalStateHashes: string[];
+  proofCount: number;
+  verified: boolean;
+  totalConstraintCount: number;
 }
 
 export interface ExecutionLog {
@@ -64,4 +118,5 @@ export interface ExecutionLog {
   maskedAmount: string;
   timestamp: number; // PRIVATE — never log or transmit
   constraintsSatisfied: boolean;
+  witnessGenerated: boolean;
 }

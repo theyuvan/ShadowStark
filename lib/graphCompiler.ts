@@ -13,6 +13,7 @@ export function compileGraphToConstraints(graph: NodeGraph): ZKConstraint[] {
     constraintType: constraintByType[node.type],
     publicInputs: [node.type, node.id],
     privateWitness: [JSON.stringify(node.data)], // PRIVATE — never log or transmit
+    estimatedSize: 256,
   }));
 }
 
