@@ -1,129 +1,114 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { BarChart3, Lock, Shield, Landmark } from "lucide-react";
 
-import { CommitmentCard } from "@/components/dashboard/CommitmentCard";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import { ExecutionTimeline } from "@/components/dashboard/ExecutionTimeline";
 import { ProofStatusCard } from "@/components/dashboard/ProofStatusCard";
-import { StarknetStatus } from "@/components/dashboard/StarknetStatus";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useZKProver } from "@/hooks/useZKProver";
-import { useStarknet } from "@/hooks/useStarknet";
-import { useProofStore } from "@/store/proofStore";
-import { useStrategyStore } from "@/store/strategyStore";
+import { CommitmentsTable } from "@/components/dashboard/CommitmentsTable";
+import type { ExecutionLog, ZKConstraint } from "@/types";
+
+// Mock data
+const mockExecutionLogs: ExecutionLog[] = [
+  {
+    stepIndex: 0,
+    nodeId: "cond-1",
+    action: "CONDITION_CHECK",
+    maskedAmount: "***",
+    timestamp: Date.now() - 3600000,
+    constraintsSatisfied: true,
+    witnessGenerated: true,
+  },
+  {
+    stepIndex: 1,
+    nodeId: "split-2",
+    action: "SPLIT",
+    maskedAmount: "***",
+    timestamp: Date.now() - 1800000,
+    constraintsSatisfied: true,
+    witnessGenerated: true,
+  },
+  {
+    stepIndex: 2,
+    nodeId: "exec-3",
+    action: "EXECUTE",
+    maskedAmount: "***",
+    timestamp: Date.now() - 900000,
+    constraintsSatisfied: true,
+    witnessGenerated: true,
+  },
+];
+
+const mockConstraints: ZKConstraint[] = [
+  {
+    nodeId: "cond-1",
+    constraintType: "range_check",
+    publicInputs: ["threshold"],
+    privateWitness: ["price", "salt"],
+    estimatedSize: 256,
+  },
+  {
+    nodeId: "split-2",
+    constraintType: "sum_partition",
+    publicInputs: ["count"],
+    privateWitness: ["amounts"],
+    estimatedSize: 512,
+  },
+  {
+    nodeId: "exec-3",
+    constraintType: "state_transition",
+    publicInputs: ["direction"],
+    privateWitness: ["amount", "timing"],
+    estimatedSize: 384,
+  },
+];
 
 export function Dashboard() {
-  const { graph, commitment } = useStrategyStore();
-  const { proof } = useProofStore();
-  const { generateProof } = useZKProver();
-  const { verifyAndExecuteProof } = useStarknet();
-  const [error, setError] = useState<string | null>(null);
-
-  const constraints = useMemo(
-    () =>
-      graph.nodes.map((node) => ({
-        nodeId: node.id,
-        constraintType: node.type,
-        publicInputs: [node.type],
-      })),
-    [graph.nodes],
-  );
-
-  const onGenerate = async () => {
-    try {
-      setError(null);
-
-      if (!commitment) {
-        throw new Error("No commitment found. Compile a strategy first.");
-      }
-
-      const executeNode = graph.nodes.find((node) => node.type === "execute");
-      const conditionNode = graph.nodes.find((node) => node.type === "condition");
-
-      const executionSteps = graph.nodes.map((node) => `${node.type}:${node.id}`);
-
-      const amount = Number((executeNode?.data as { amount?: number } | undefined)?.amount ?? 0);
-      const price = Number((conditionNode?.data as { price?: number } | undefined)?.price ?? 0);
-
-      const tradeAmount = BigInt(Math.max(1, Math.floor(amount * 100_000_000))); // PRIVATE — never log or transmit
-      const centerPrice = BigInt(Math.max(1, Math.floor(price || 50_000))); // PRIVATE — never log or transmit
-      const spread = 2_000n;
-
-      const proof = await generateProof({
-        tradeAmount,
-        priceLower: centerPrice - spread,
-        priceUpper: centerPrice + spread,
-        executionSteps,
-      });
-
-      await verifyAndExecuteProof(proof);
-    } catch (nextError) {
-      const message = nextError instanceof Error ? nextError.message : "Execution failed";
-      setError(message);
-    }
-  };
-
   return (
-    <Tabs defaultValue="overview" className="space-y-4">
-      <TabsList>
-        <TabsTrigger value="overview">Overview</TabsTrigger>
-        <TabsTrigger value="logs">Execution Logs</TabsTrigger>
-        <TabsTrigger value="constraints">ZK Constraints</TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="overview" className="space-y-4">
-        {error ? (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
+    <main className="space-y-4 p-4">
+      {/* Header */}
+      <section className="rounded-xl border border-border bg-surface p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-muted">Real-time Metrics</p>
+            <h1 className="font-heading text-2xl font-semibold text-foreground">Dashboard</h1>
           </div>
-        ) : null}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <CommitmentCard commitment={commitment} />
-          <ProofStatusCard onGenerate={onGenerate} />
-          <StarknetStatus />
+          <div className="text-[11px] text-muted">Live updates every 5s</div>
         </div>
+      </section>
+
+      {/* 4 Metric Cards */}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <MetricCard
+          label="Strategies Committed"
+          value="2"
+          icon={<BarChart3 className="h-5 w-5" />}
+        />
+        <MetricCard
+          label="Proofs Verified"
+          value="2"
+          icon={<Shield className="h-5 w-5" />}
+        />
+        <MetricCard
+          label="Nullifiers Active"
+          value="8"
+          icon={<Lock className="h-5 w-5" />}
+        />
+        <MetricCard
+          label="Merkle Root"
+          value="0x3f2a...b8c1"
+          icon={<Landmark className="h-5 w-5" />}
+        />
+      </div>
+
+      {/* 2-Column Layout: Timeline + Proof Status */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.5fr_1fr]">
         <ExecutionTimeline />
-      </TabsContent>
+        <ProofStatusCard />
+      </div>
 
-      <TabsContent value="logs">
-        <div className="rounded-xl border border-border bg-surface p-4">
-          <h3 className="mb-3 font-heading text-lg font-bold">Execution Log Table</h3>
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-border text-muted">
-                <th className="py-2">Step</th>
-                <th>Node</th>
-                <th>Action</th>
-                <th>Masked</th>
-              </tr>
-            </thead>
-            <tbody>
-              {graph.nodes.map((node, index) => (
-                <tr key={node.id} className="border-b border-border/50">
-                  <td className="py-2">{index + 1}</td>
-                  <td>{node.id.slice(0, 6)}</td>
-                  <td>{node.type.toUpperCase()}</td>
-                  <td className="redacted">████</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </TabsContent>
-
-      <TabsContent value="constraints">
-        <div className="rounded-xl border border-border bg-surface p-4">
-          <h3 className="mb-3 font-heading text-lg font-bold">Constraint Set</h3>
-          <ul className="space-y-2 text-sm">
-            {constraints.map((item) => (
-              <li key={item.nodeId} className="rounded-md border border-border p-2">
-                {item.nodeId.slice(0, 8)} — {item.constraintType}
-              </li>
-            ))}
-          </ul>
-          {proof ? <p className="mt-3 text-xs text-primary">Proof hash: {proof.proofHash}</p> : null}
-        </div>
-      </TabsContent>
-    </Tabs>
+      {/* Bottom: 3-Tab Table Panel */}
+      <CommitmentsTable logs={mockExecutionLogs} constraints={mockConstraints} />
+    </main>
   );
 }

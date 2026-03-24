@@ -1,25 +1,83 @@
 "use client";
 
-import { Card, Title, Text } from "@tremor/react";
+const steps = ["Serialize", "Hash", "Prove", "Verify"];
 
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { useProofStore } from "@/store/proofStore";
+export function ProofStatusCard() {
+  const currentStep = 2; // "Prove" in progress
 
-export function ProofStatusCard({ onGenerate }: { onGenerate: () => Promise<void> }) {
-  const { status, progress, proof } = useProofStore();
+  const circumference = 2 * Math.PI * 45;
+  const offset = circumference - (currentStep / steps.length) * circumference;
 
   return (
-    <Card decoration="top" decorationColor="blue">
-      <Title>ZK Proof Status</Title>
-      <Text>{status}</Text>
-      <div className="mt-3 space-y-2">
-        <Progress value={progress} />
-        <Text>{proof ? `Proof: ${proof.proofHash.slice(0, 14)}...` : "Proof hash pending"}</Text>
+    <div className="rounded-xl border border-border bg-surface p-5">
+      <h3 className="mb-4 font-heading text-sm font-semibold">ZK Proof Status</h3>
+
+      <div className="flex flex-col items-center">
+        <div className="relative h-40 w-40">
+          <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100">
+            <circle
+              cx="50"
+              cy="50"
+              r="45"
+              fill="none"
+              stroke="rgba(99,102,241,0.2)"
+              strokeWidth="3"
+            />
+            <circle
+              cx="50"
+              cy="50"
+              r="45"
+              fill="none"
+              stroke="#A855F7"
+              strokeWidth="3"
+              strokeDasharray={circumference}
+              strokeDashoffset={offset}
+              strokeLinecap="round"
+              className="transition-all duration-500"
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center text-center">
+            <div>
+              <p className="text-2xl font-heading font-semibold text-foreground">
+                {Math.round((currentStep / steps.length) * 100)}%
+              </p>
+              <p className="text-xs text-muted">In Progress</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Step Labels */}
+        <div className="mt-6 flex w-full justify-between gap-2 text-[10px]">
+          {steps.map((step, idx) => (
+            <div
+              key={step}
+              className={`flex flex-col items-center gap-1 ${
+                idx < currentStep
+                  ? "text-emerald-400"
+                  : idx === currentStep
+                    ? "text-amber-400"
+                    : "text-muted"
+              }`}
+            >
+              <div
+                className={`h-2 w-2 rounded-full ${
+                  idx < currentStep
+                    ? "bg-emerald-400"
+                    : idx === currentStep
+                      ? "bg-amber-400 animate-pulse"
+                      : "bg-border"
+                }`}
+              />
+              <span>{step}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Action Button */}
+        <button className="mt-6 w-full rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white hover:bg-primary/90 transition-colors">
+          Generate New Proof
+        </button>
       </div>
-      <Button className="mt-4" onClick={() => void onGenerate()}>
-        Generate Proof
-      </Button>
-    </Card>
+    </div>
   );
 }
