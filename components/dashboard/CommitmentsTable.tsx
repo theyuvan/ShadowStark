@@ -3,34 +3,17 @@
 import { useState } from "react";
 import { ExternalLink } from "lucide-react";
 
-import type { ExecutionLog, ZKConstraint } from "@/types";
+import type { ExecutionLog, TradeRecord, ZKConstraint } from "@/types";
 
 type TabType = "commitments" | "logs" | "constraints";
 
 interface CommitmentsTableProps {
+  commitments: TradeRecord[];
   logs: ExecutionLog[];
   constraints: ZKConstraint[];
 }
 
-const mockCommitments = [
-  {
-    timestamp: Date.now() - 86400000,
-    commitment: "0x3f2a5bc81098765432abcdef3f2a5bc8",
-    status: "verified",
-  },
-  {
-    timestamp: Date.now() - 172800000,
-    commitment: "0x2e1b9cd7987654321fedcba2e1b9cd79",
-    status: "verified",
-  },
-  {
-    timestamp: Date.now() - 259200000,
-    commitment: "0x1d0a8be69876543210edcba1d0a8be69",
-    status: "pending",
-  },
-];
-
-export function CommitmentsTable({ logs, constraints }: CommitmentsTableProps) {
+export function CommitmentsTable({ commitments, logs, constraints }: CommitmentsTableProps) {
   const [activeTab, setActiveTab] = useState<TabType>("commitments");
 
   return (
@@ -69,10 +52,10 @@ export function CommitmentsTable({ logs, constraints }: CommitmentsTableProps) {
               </tr>
             </thead>
             <tbody>
-              {mockCommitments.map((item, idx) => (
-                <tr key={idx} className="border-b border-border/30 hover:bg-background/20">
+              {commitments.map((item, idx) => (
+                <tr key={item.id ?? idx} className="border-b border-border/30 hover:bg-background/20">
                   <td className="px-4 py-2 text-muted">
-                    {new Date(item.timestamp).toLocaleDateString(undefined, {
+                    {new Date(item.createdAt).toLocaleDateString(undefined, {
                       month: "short",
                       day: "numeric",
                       hour: "2-digit",
@@ -85,16 +68,25 @@ export function CommitmentsTable({ logs, constraints }: CommitmentsTableProps) {
                   <td className="px-4 py-2">
                     <span
                       className={
-                        item.status === "verified" ? "text-emerald-400" : "text-amber-400"
+                        item.proofHash ? "text-emerald-400" : "text-amber-400"
                       }
                     >
-                      {item.status === "verified" ? "Verified ✓" : "Pending..."}
+                      {item.proofHash ? "Verified ✓" : "Pending..."}
                     </span>
                   </td>
                   <td className="px-4 py-2">
-                    <button className="flex items-center gap-1 text-primary hover:underline">
-                      View <ExternalLink className="h-3 w-3" />
-                    </button>
+                    {item.proofHash ? (
+                      <a
+                        className="flex items-center gap-1 text-primary hover:underline"
+                        href={`${process.env.NEXT_PUBLIC_STARKSCAN_TX_BASE_URL || "https://sepolia.starkscan.co/tx"}/${item.proofHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -5,6 +5,22 @@ import { Bitcoin, Loader2 } from "lucide-react";
 import { WalletModal } from "@/components/wallet/WalletModal";
 import { WalletDropdown } from "@/components/wallet/WalletDropdown";
 import { useWalletStore } from "@/store/walletStore";
+import { otcClient } from "@/lib/otcClient";
+
+interface InjectedStarknetWallet {
+  enable: (options?: Record<string, unknown>) => Promise<unknown>;
+  selectedAddress?: string;
+  account?: {
+    address?: string;
+  };
+  disconnect?: () => Promise<void> | void;
+}
+
+declare global {
+  interface Window {
+    starknet?: InjectedStarknetWallet;
+  }
+}
 
 export function ConnectWallet() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -24,15 +40,44 @@ export function ConnectWallet() {
     disconnect,
   } = useWalletStore();
 
-  const handleConnect = async (wallet: "argentx" | "braavos" | "metamask-snap") => {
-    setConnecting(true);
-    setWalletName(wallet);
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    setAddress("0x1234567890abcdef1234567890abcdef12345678");
-    setBalances("0.2341", "45.2");
-    setConnected(true);
-    setConnecting(false);
-    setModalOpen(false);
+  const handleConnect = async (wallet: "argentx" | "braavos" | "ready" | "metamask-snap") => {
+    try {
+      setConnecting(true);
+      setWalletName(wallet);
+
+      const injectedWallet = window.starknet;
+      if (!injectedWallet) {
+        throw new Error("No Starknet wallet detected. Install ArgentX or Braavos.");
+      }
+
+      await injectedWallet.enable({ showModal: true });
+
+      const selectedAddress = injectedWallet.selectedAddress || injectedWallet.account?.address;
+      if (!selectedAddress) {
+        throw new Error("Wallet connection failed: no address returned.");
+      }
+
+      setAddress(selectedAddress);
+      setConnected(true);
+
+      try {
+        if (otcClient.isConfigured()) {
+          const balances = await otcClient.getWalletBalances(selectedAddress);
+          setBalances(balances.btcBalance, balances.strkBalance);
+        } else {
+          setBalances("0.0000", "0.00");
+        }
+      } catch {
+        setBalances("0.0000", "0.00");
+      }
+
+      setModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      disconnect();
+    } finally {
+      setConnecting(false);
+    }
   };
 
   return (
@@ -65,6 +110,7 @@ export function ConnectWallet() {
           btcBalance={btcBalance}
           strkBalance={strkBalance}
           onDisconnect={() => {
+            void window.starknet?.disconnect?.();
             disconnect();
             setDropdownOpen(false);
           }}

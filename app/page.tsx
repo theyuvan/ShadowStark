@@ -1,6 +1,28 @@
 export default function HomePage() {
   return (
     <main className="space-y-6 p-4">
+      <section className="rounded-xl border border-border bg-surface p-4">
+        <nav className="flex flex-wrap items-center gap-2 text-xs">
+          {[
+            { label: "Home", href: "/" },
+            { label: "About", href: "#about" },
+            { label: "Builder", href: "/builder" },
+            { label: "Trades", href: "/trades" },
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Simulate", href: "/simulate" },
+            { label: "Docs", href: "/docs" },
+          ].map((item) => (
+            <a
+              key={item.label}
+              href={item.href}
+              className="rounded-md border border-border bg-background/40 px-3 py-1 text-secondary transition-colors hover:bg-elevated hover:text-foreground"
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+      </section>
+
       <section className="relative overflow-hidden rounded-xl border border-border bg-surface p-8">
         <div className="pointer-events-none absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, rgba(99,102,241,0.4) 1px, transparent 0)", backgroundSize: "18px 18px" }} />
         <div className="relative">
@@ -32,6 +54,14 @@ export default function HomePage() {
           <p className="text-[11px] uppercase tracking-[0.18em] text-muted">Verification</p>
           <p className="mt-2 text-sm text-secondary">Proof checks finalize on Starknet contracts for auditable, tamper-resistant strategy outcomes.</p>
         </div>
+      </section>
+
+      <section id="about" className="rounded-xl border border-border bg-surface p-5">
+        <p className="text-[11px] uppercase tracking-[0.2em] text-muted">About</p>
+        <p className="mt-2 text-sm text-secondary">
+          ShadowFlowBTC++ is a production-focused OTC + intent execution workflow for BTC strategy automation with Starknet settlement.
+          Wallet-connected users submit BUY/SELL intents, produce proofs through backend circuits, and finalize verification on-chain.
+        </p>
       </section>
 
       <section className="rounded-xl border border-border bg-surface p-5">

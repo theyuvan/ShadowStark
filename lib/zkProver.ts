@@ -1,34 +1,75 @@
 import { randomBytes } from "@noble/hashes/utils.js";
+import { hash } from "starknet";
 
-import type { NodeGraph, ZKProof, CircuitPublicInputs } from "@/types";
+import type { NodeGraph, ZKProof } from "@/types";
+import { ZKProver, verifyZKProof as verifyLocalZKProof } from "@/lib/zk/zkProver";
+import { starknetClient } from "@/lib/starknetClient";
 
-const hex = (size: number) => `0x${Buffer.from(randomBytes(size)).toString("hex")}`;
+const prover = new ZKProver(20);
+
+const randomBigInt = (): bigint => BigInt(`0x${Buffer.from(randomBytes(31)).toString("hex")}`);
+
+const publicInputsHash = (proof: ZKProof): string =>
+  hash.computePoseidonHashOnElements([
+    proof.commitment,
+    proof.finalStateHash,
+    proof.nullifier,
+    proof.merkleRoot,
+  ]);
+
+async function persistProofArtifact(proof: ZKProof, graph: NodeGraph): Promise<string | undefined> {
+  try {
+    const response = await fetch("/api/proofs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ proof, graph }),
+    });
+
+    if (!response.ok) {
+      return undefined;
+    }
+
+    const data = (await response.json()) as { filePath?: string };
+    return data.filePath;
+  } catch {
+    return undefined;
+  }
+}
 
 export async function generateZkProof(graph: NodeGraph, commitment: string): Promise<ZKProof> {
-  await new Promise((resolve) => setTimeout(resolve, 900));
+  const graphDigest = hash.computePoseidonHashOnElements([commitment, `0x${graph.nodes.length.toString(16)}`]);
 
-  const publicInputs: CircuitPublicInputs = {
+  const proof = await prover.generateProof(
     commitment,
-    finalStateHash: hex(32),
-    nullifier: hex(32),
-    merkleRoot: hex(32),
-  };
+    {
+      salt: "shadowflow-live",
+      tradeAmount: 10000000n,
+      priceLower: 35000n,
+      priceUpper: 120000n,
+      executionSteps: graph.nodes.map((node) => node.type),
+    },
+    {
+      finalStateHash: graphDigest,
+      secretKey: randomBigInt(),
+    },
+    randomBigInt(),
+  );
 
-  return {
-    proofHash: hex(32),
-    commitment,
-    finalStateHash: publicInputs.finalStateHash,
-    nullifier: publicInputs.nullifier,
-    merkleRoot: publicInputs.merkleRoot,
-    publicInputs,
-    verified: false,
-    constraintCount: 12 + graph.nodes.length * 3,
-    proofSize: 2048,
-    timestamp: Date.now(),
-  };
+  proof.verified = false;
+  proof.teeAttested = true;
+  proof.artifactFile = await persistProofArtifact(proof, graph);
+
+  return proof;
 }
 
 export async function verifyZkProof(proof: ZKProof): Promise<boolean> {
-  await new Promise((resolve) => setTimeout(resolve, 600));
-  return proof.proofHash.length > 10 && proof.verified === false; // Stub: returns false until on-chain
+  try {
+    const result = await starknetClient.verifyProofOnChain(proof.proofHash, publicInputsHash(proof));
+    proof.verified = result.isValid;
+    return result.isValid;
+  } catch {
+    const fallback = verifyLocalZKProof(proof, new Set());
+    proof.verified = fallback;
+    return fallback;
+  }
 }

@@ -5,6 +5,7 @@ import { Loader2, Wallet } from "lucide-react";
 const wallets = [
   { id: "argentx", name: "ArgentX", description: "Most popular Starknet wallet", recommended: true },
   { id: "braavos", name: "Braavos", description: "Smart wallet with biometrics", recommended: false },
+  { id: "ready", name: "Ready Wallet", description: "Ready mobile/web Starknet wallet", recommended: false },
   { id: "metamask-snap", name: "MetaMask Snap", description: "Via Starknet Snap", recommended: false },
 ] as const;
 
@@ -17,7 +18,7 @@ export function WalletModal({
   open: boolean;
   loading: boolean;
   onClose: () => void;
-  onSelect: (wallet: "argentx" | "braavos" | "metamask-snap") => void;
+  onSelect: (wallet: "argentx" | "braavos" | "ready" | "metamask-snap") => void;
 }) {
   if (!open) return null;
 

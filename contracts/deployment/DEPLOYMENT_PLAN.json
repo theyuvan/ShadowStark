@@ -1,0 +1,39 @@
+﻿{
+    "timestamp":  "2026-03-24T18:06:34.9088335Z",
+    "next_steps":  [
+                       "1. Set up a Starknet account (Cairo + sncast)",
+                       "   Run: sncast account create --name myaccount --network sepolia",
+                       "",
+                       "2. Fund your account with Starknet test tokens",
+                       "   Testnet faucet: https://starknet-faucet.vercel.app",
+                       "",
+                       "3. Declare contracts:",
+                       "   sncast --profile sepolia declare --contract-name GaragaVerifier",
+                       "   sncast --profile sepolia declare --contract-name ShadowFlow",
+                       "",
+                       "4. Deploy declared contracts:",
+                       "   sncast --profile sepolia deploy \u003cclass-hash\u003e \u003cconstructor-args\u003e",
+                       "",
+                       "5. Update environment variables with deployed addresses:",
+                       "   NEXT_PUBLIC_GARAGA_VERIFIER_ADDRESS=0x...",
+                       "   NEXT_PUBLIC_SHADOWFLOW_CONTRACT_ADDRESS=0x..."
+                   ],
+    "network":  "sepolia",
+    "compiled_artifacts":  [
+                               {
+                                   "name":  "garaga_verifier",
+                                   "path":  "C:\\Users\\thame\\shadowflow-BTC\\shadowflow-btc\\contracts\\src\\garaga_verifier.cairo",
+                                   "size":  1048
+                               },
+                               {
+                                   "name":  "lib",
+                                   "path":  "C:\\Users\\thame\\shadowflow-BTC\\shadowflow-btc\\contracts\\src\\lib.cairo",
+                                   "size":  81
+                               },
+                               {
+                                   "name":  "shadowflow",
+                                   "path":  "C:\\Users\\thame\\shadowflow-BTC\\shadowflow-btc\\contracts\\src\\shadowflow.cairo",
+                                   "size":  3337
+                               }
+                           ]
+}

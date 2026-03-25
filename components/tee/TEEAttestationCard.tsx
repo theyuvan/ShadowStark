@@ -8,15 +8,17 @@ interface TEEAttestationCardProps {
   attestation?: TEEAttestation | null;
 }
 
-const mockAttestation: TEEAttestation = {
-  enclaveType: "SGX",
-  measurementHash: "0x3f2a5bc8d1e7944cf2b3a5e9c1f6d8a2b4e7f9c3d6a8b1e4f7c9d2e5a8b1f4",
-  valid: true,
-  timestamp: Date.now(),
-};
-
 export function TEEAttestationCard({ attestation }: TEEAttestationCardProps) {
-  const data = attestation || mockAttestation;
+  if (!attestation) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-5">
+        <h3 className="font-heading text-lg font-semibold">TEE Attestation</h3>
+        <p className="mt-2 text-xs text-muted">No attestation available yet. Execute a real strategy to generate one.</p>
+      </div>
+    );
+  }
+
+  const data = attestation;
 
   return (
     <motion.div

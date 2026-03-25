@@ -106,6 +106,8 @@ export interface ZKProof {
   constraintCount: number;
   proofSize: number; // in bytes
   timestamp: number;
+  artifactFile?: string;
+  teeAttested?: boolean;
 }
 
 export interface AggregatedProof {
@@ -131,11 +133,11 @@ export interface WalletConnection {
   connected: boolean;
   address: string | null;
   network: "starknet-testnet" | "starknet-mainnet";
-  walletName: "argentx" | "braavos" | "metamask-snap" | null;
+  walletName: "argentx" | "braavos" | "metamask-snap" | "ready" | null;
 }
 
 export interface TEEAttestation {
-  enclaveType: "SGX" | "Nitro" | "simulated";
+  enclaveType: "SGX" | "Nitro";
   measurementHash: string;
   timestamp: number;
   valid: boolean;

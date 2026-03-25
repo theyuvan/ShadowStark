@@ -1,69 +1,47 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { BarChart3, Lock, Shield, Landmark } from "lucide-react";
 
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { ExecutionTimeline } from "@/components/dashboard/ExecutionTimeline";
 import { ProofStatusCard } from "@/components/dashboard/ProofStatusCard";
 import { CommitmentsTable } from "@/components/dashboard/CommitmentsTable";
-import type { ExecutionLog, ZKConstraint } from "@/types";
-
-// Mock data
-const mockExecutionLogs: ExecutionLog[] = [
-  {
-    stepIndex: 0,
-    nodeId: "cond-1",
-    action: "CONDITION_CHECK",
-    maskedAmount: "***",
-    timestamp: Date.now() - 3600000,
-    constraintsSatisfied: true,
-    witnessGenerated: true,
-  },
-  {
-    stepIndex: 1,
-    nodeId: "split-2",
-    action: "SPLIT",
-    maskedAmount: "***",
-    timestamp: Date.now() - 1800000,
-    constraintsSatisfied: true,
-    witnessGenerated: true,
-  },
-  {
-    stepIndex: 2,
-    nodeId: "exec-3",
-    action: "EXECUTE",
-    maskedAmount: "***",
-    timestamp: Date.now() - 900000,
-    constraintsSatisfied: true,
-    witnessGenerated: true,
-  },
-];
-
-const mockConstraints: ZKConstraint[] = [
-  {
-    nodeId: "cond-1",
-    constraintType: "range_check",
-    publicInputs: ["threshold"],
-    privateWitness: ["price", "salt"],
-    estimatedSize: 256,
-  },
-  {
-    nodeId: "split-2",
-    constraintType: "sum_partition",
-    publicInputs: ["count"],
-    privateWitness: ["amounts"],
-    estimatedSize: 512,
-  },
-  {
-    nodeId: "exec-3",
-    constraintType: "state_transition",
-    publicInputs: ["direction"],
-    privateWitness: ["amount", "timing"],
-    estimatedSize: 384,
-  },
-];
+import { useExecutionStore } from "@/store/executionStore";
+import { useStrategyStore } from "@/store/strategyStore";
+import { useWalletStore } from "@/store/walletStore";
+import { otcClient } from "@/lib/otcClient";
+import { compileGraphToConstraints } from "@/lib/graphCompiler";
+import type { TradeRecord } from "@/types";
 
 export function Dashboard() {
+  const logs = useExecutionStore((state) => state.logs);
+  const graph = useStrategyStore((state) => state.graph);
+  const address = useWalletStore((state) => state.address);
+  const connected = useWalletStore((state) => state.connected);
+  const [commitments, setCommitments] = useState<TradeRecord[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!connected || !address || !otcClient.isConfigured()) {
+        setCommitments([]);
+        return;
+      }
+
+      try {
+        const items = await otcClient.listTrades(address);
+        setCommitments(items);
+      } catch {
+        setCommitments([]);
+      }
+    };
+
+    void load();
+  }, [address, connected]);
+
+  const constraints = useMemo(() => compileGraphToConstraints(graph), [graph]);
+  const merkleRoot = commitments[0]?.commitment ? `${commitments[0].commitment.slice(0, 10)}...` : "0x0";
+
   return (
     <main className="space-y-4 p-4">
       {/* Header */}
@@ -81,34 +59,34 @@ export function Dashboard() {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <MetricCard
           label="Strategies Committed"
-          value="2"
+          value={String(commitments.length)}
           icon={<BarChart3 className="h-5 w-5" />}
         />
         <MetricCard
           label="Proofs Verified"
-          value="2"
+          value={String(commitments.filter((item) => Boolean(item.proofHash)).length)}
           icon={<Shield className="h-5 w-5" />}
         />
         <MetricCard
           label="Nullifiers Active"
-          value="8"
+          value={String(logs.filter((item) => item.witnessGenerated).length)}
           icon={<Lock className="h-5 w-5" />}
         />
         <MetricCard
           label="Merkle Root"
-          value="0x3f2a...b8c1"
+          value={merkleRoot}
           icon={<Landmark className="h-5 w-5" />}
         />
       </div>
 
       {/* 2-Column Layout: Timeline + Proof Status */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.5fr_1fr]">
-        <ExecutionTimeline />
+        <ExecutionTimeline logs={logs} />
         <ProofStatusCard />
       </div>
 
       {/* Bottom: 3-Tab Table Panel */}
-      <CommitmentsTable logs={mockExecutionLogs} constraints={mockConstraints} />
+      <CommitmentsTable commitments={commitments} logs={logs} constraints={constraints} />
     </main>
   );
 }

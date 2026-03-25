@@ -39,6 +39,17 @@ export function DocsPage() {
           </p>
         </header>
 
+        <section className="rounded-xl border border-border bg-surface p-5">
+          <h2 className="font-heading text-xl font-semibold">What to do on each page</h2>
+          <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-secondary">
+            <li><span className="text-foreground">Builder:</span> Create graph nodes and click <span className="font-code text-foreground">Compile to ZK (Wallet Confirm)</span>.</li>
+            <li><span className="text-foreground">Simulate:</span> Inspect generated proof, nullifier state, Merkle root, and TEE attestation.</li>
+            <li><span className="text-foreground">Trades:</span> Submit BUY/SELL intents and monitor proof-linked execution logs.</li>
+            <li><span className="text-foreground">Dashboard:</span> Review global strategy and verification health metrics.</li>
+            <li><span className="text-foreground">Docs:</span> Keep RPC/env settings aligned with Sepolia deployment addresses.</li>
+          </ol>
+        </section>
+
         <section id="getting-started" className="rounded-xl border border-border bg-surface p-5">
           <h2 className="font-heading text-xl font-semibold">Getting Started</h2>
           <div className="mt-3 rounded-lg border border-border bg-background/50 p-3 text-xs font-code text-cyan-400">

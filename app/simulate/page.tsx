@@ -1,43 +1,80 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
 import { ExecutionVisualizer } from "@/components/visualizer/ExecutionVisualizer";
 import { TEEAttestationCard } from "@/components/tee/TEEAttestationCard";
 import { MerkleTreeVisualizer, NullifierStatus, ProofInspector, RangeProofWidget } from "@/components/zk";
-import type { ZKProof } from "@/types";
-
-const mockProof: ZKProof = {
-  proofHash: "0x91ab3f2ec984ad57f0de1245779bca1f0f3d2a4c9e66b77f9a4e5cc1aa76ef11",
-  commitment: "0x3f2a5bc8d1e7944cf2b3a5e9c1f6d8a2b4e7f9c3d6a8b1e4f7c9d2e5a8b1f4",
-  finalStateHash: "0x8be6dc9f3451f9f4e2a412ff995233ad155e19d31b59f54a31b20e572c1da229",
-  nullifier: "0x2f18ab7791e2d4c6",
-  merkleRoot: "0x57c1d29ab8e44c8f9bbf1e374aa991ac9d2a11b2ed4d37b9f44150a81e5c9af2",
-  publicInputs: {
-    commitment: "0x3f2a5bc8",
-    finalStateHash: "0x8be6dc9f",
-    nullifier: "0x2f18ab77",
-    merkleRoot: "0x57c1d29a",
-  },
-  verified: true,
-  constraintCount: 42,
-  proofSize: 21504,
-  timestamp: Date.now(),
-};
+import { useWalletStore } from "@/store/walletStore";
+import { useZKStore } from "@/store/zkStore";
+import { otcClient } from "@/lib/otcClient";
+import type { TEEAttestation } from "@/types";
 
 export default function SimulatePage() {
+  const { address, connected } = useWalletStore();
+  const currentProof = useZKStore((state) => state.currentProof);
+  const spentNullifiers = useZKStore((state) => state.spentNullifiers);
+  const [attestation, setAttestation] = useState<TEEAttestation | null>(null);
+
+  useEffect(() => {
+    const run = async () => {
+      if (!connected || !address || !otcClient.isConfigured()) {
+        if (currentProof?.teeAttested) {
+          setAttestation({
+            enclaveType: "Nitro",
+            measurementHash: currentProof.proofHash,
+            timestamp: currentProof.timestamp,
+            valid: true,
+          });
+        } else {
+          setAttestation(null);
+        }
+        return;
+      }
+
+      try {
+        const latestAttestation = await otcClient.getLatestAttestation(address);
+        setAttestation(latestAttestation);
+      } catch {
+        setAttestation(null);
+      }
+    };
+
+    void run();
+  }, [address, connected, currentProof]);
+
+  const isSpent = currentProof?.nullifier
+    ? spentNullifiers.includes(BigInt(currentProof.nullifier))
+    : false;
+
   return (
     <div className="space-y-6 p-4">
       <ExecutionVisualizer />
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <TEEAttestationCard />
-        <RangeProofWidget valueCommitment={mockProof.commitment} proofGenerated={true} />
+        <TEEAttestationCard attestation={attestation} />
+        <RangeProofWidget
+          valueCommitment={currentProof?.commitment ?? "0x0"}
+          proofGenerated={Boolean(currentProof)}
+        />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <NullifierStatus nullifier={0x2f18ab7791e2d4c6n} isSpent={false} isNew={true} />
-        <MerkleTreeVisualizer root={0x57c1d29ab8e44c8fn} leafCount={4} depth={3} highlightedLeaf={1} />
+        <NullifierStatus
+          nullifier={currentProof?.nullifier ? BigInt(currentProof.nullifier) : null}
+          isSpent={isSpent}
+          isNew={Boolean(currentProof)}
+        />
+        <MerkleTreeVisualizer
+          root={currentProof?.merkleRoot ? BigInt(currentProof.merkleRoot) : 0n}
+          leafCount={currentProof ? 1 : 0}
+          depth={3}
+          highlightedLeaf={currentProof ? 0 : undefined}
+        />
       </section>
 
       <section>
-        <ProofInspector proof={mockProof} />
+        <ProofInspector proof={currentProof} />
       </section>
     </div>
   );

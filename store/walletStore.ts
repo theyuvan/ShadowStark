@@ -5,7 +5,7 @@ interface WalletState {
   connecting: boolean;
   address: string | null;
   network: "starknet-testnet" | "starknet-mainnet";
-  walletName: "argentx" | "braavos" | "metamask-snap" | null;
+  walletName: "argentx" | "braavos" | "metamask-snap" | "ready" | null;
   btcBalance: string;
   strkBalance: string;
   setConnected: (connected: boolean) => void;

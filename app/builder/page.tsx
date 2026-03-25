@@ -24,7 +24,7 @@ export default function BuilderPage() {
       <ZKFlowBuilder />
 
       <section className="rounded-xl border border-border bg-surface px-4 py-3 text-xs text-muted">
-        Compile produces commitment only; private witness data remains local and redacted in UI.
+        Compile requires wallet confirmation, generates a proof artifact in the local proofs folder, and then runs verification.
       </section>
     </main>
   );

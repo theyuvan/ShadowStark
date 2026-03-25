@@ -1,4 +1,4 @@
-import { Provider, RpcProvider, Contract, ABI } from "starknet";
+import { Provider, RpcProvider } from "starknet";
 
 const DEFAULT_RPC =
   process.env.NEXT_PUBLIC_STARKNET_RPC_URL ||
@@ -6,55 +6,6 @@ const DEFAULT_RPC =
 
 const VERIFIER_ADDRESS = process.env.NEXT_PUBLIC_GARAGA_VERIFIER_ADDRESS || "";
 const SHADOWFLOW_ADDRESS = process.env.NEXT_PUBLIC_SHADOWFLOW_CONTRACT_ADDRESS || "";
-
-// Minimal ABI for GaragaVerifier contract
-const VERIFIER_ABI: ABI = [
-  {
-    type: "function",
-    name: "verify",
-    inputs: [
-      { name: "proof_hash", type: "felt252" },
-      { name: "public_inputs_hash", type: "felt252" },
-    ],
-    outputs: [{ name: "is_valid", type: "bool" }],
-    state_mutability: "view",
-  },
-  {
-    type: "function",
-    name: "set_allowed_proof",
-    inputs: [
-      { name: "proof_hash", type: "felt252" },
-      { name: "is_allowed", type: "bool" },
-    ],
-    outputs: [],
-    state_mutability: "external",
-  },
-];
-
-// Minimal ABI for ShadowFlow contract
-const SHADOWFLOW_ABI: ABI = [
-  {
-    type: "function",
-    name: "get_commitment",
-    inputs: [{ name: "user", type: "ContractAddress" }],
-    outputs: [{ name: "commitment", type: "felt252" }],
-    state_mutability: "view",
-  },
-  {
-    type: "function",
-    name: "get_merkle_root",
-    inputs: [],
-    outputs: [{ name: "root", type: "felt252" }],
-    state_mutability: "view",
-  },
-  {
-    type: "function",
-    name: "is_nullifier_spent",
-    inputs: [{ name: "nullifier", type: "felt252" }],
-    outputs: [{ name: "spent", type: "bool" }],
-    state_mutability: "view",
-  },
-];
 
 export interface VerificationReceipt {
   txHash: string;
@@ -103,16 +54,19 @@ export class ShadowFlowStarknetClient {
     }
 
     try {
-      // Create contract instance
-      const verifierContract = new Contract(VERIFIER_ABI, this.verifierAddress, this.provider);
+      const result = await this.provider.callContract({
+        contractAddress: this.verifierAddress,
+        entrypoint: "verify",
+        calldata: [proofHash, publicInputsHash],
+      });
 
-      // Call the verify function
-      const result = await verifierContract.verify(proofHash, publicInputsHash);
+      const flag = result?.[0] ?? "0x0";
+      const isValid = BigInt(flag) === 1n;
 
       return {
         proofHash,
         publicInputsHash,
-        isValid: Boolean(result),
+        isValid,
         timestamp: Date.now(),
       };
     } catch (error) {
@@ -132,9 +86,13 @@ export class ShadowFlowStarknetClient {
     }
 
     try {
-      const shadowflowContract = new Contract(SHADOWFLOW_ABI, this.shadowflowAddress, this.provider);
-      const commitment = await shadowflowContract.get_commitment(userAddress);
-      return commitment.toString();
+      const result = await this.provider.callContract({
+        contractAddress: this.shadowflowAddress,
+        entrypoint: "get_commitment",
+        calldata: [userAddress],
+      });
+
+      return result?.[0] ?? "0x0";
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       throw new Error(`Failed to fetch commitment: ${message}`);
@@ -152,9 +110,13 @@ export class ShadowFlowStarknetClient {
     }
 
     try {
-      const shadowflowContract = new Contract(SHADOWFLOW_ABI, this.shadowflowAddress, this.provider);
-      const root = await shadowflowContract.get_merkle_root();
-      return root.toString();
+      const result = await this.provider.callContract({
+        contractAddress: this.shadowflowAddress,
+        entrypoint: "get_merkle_root",
+        calldata: [],
+      });
+
+      return result?.[0] ?? "0x0";
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       throw new Error(`Failed to fetch Merkle root: ${message}`);
@@ -172,9 +134,14 @@ export class ShadowFlowStarknetClient {
     }
 
     try {
-      const shadowflowContract = new Contract(SHADOWFLOW_ABI, this.shadowflowAddress, this.provider);
-      const spent = await shadowflowContract.is_nullifier_spent(nullifier);
-      return Boolean(spent);
+      const result = await this.provider.callContract({
+        contractAddress: this.shadowflowAddress,
+        entrypoint: "is_nullifier_spent",
+        calldata: [nullifier],
+      });
+
+      const flag = result?.[0] ?? "0x0";
+      return BigInt(flag) === 1n;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       throw new Error(`Failed to check nullifier status: ${message}`);

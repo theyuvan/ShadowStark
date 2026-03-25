@@ -5,9 +5,10 @@ import type { TradeRecord } from "@/types";
 
 interface TradeHistoryProps {
   trades: TradeRecord[];
+  onViewProof?: (trade: TradeRecord) => void;
 }
 
-export function TradeHistory({ trades }: TradeHistoryProps) {
+export function TradeHistory({ trades, onViewProof }: TradeHistoryProps) {
   if (!trades.length) {
     return (
       <div className="flex h-64 items-center justify-center rounded-xl border border-border/50 bg-surface/50 text-xs text-muted">
@@ -70,9 +71,16 @@ export function TradeHistory({ trades }: TradeHistoryProps) {
                 </code>
               </td>
               <td className="px-4 py-2">
-                <button className="flex items-center gap-1 text-primary hover:underline">
-                  View Proof <ExternalLink className="h-3 w-3" />
-                </button>
+                {trade.proofHash ? (
+                  <button
+                    className="flex items-center gap-1 text-primary hover:underline"
+                    onClick={() => onViewProof?.(trade)}
+                  >
+                    View Proof <ExternalLink className="h-3 w-3" />
+                  </button>
+                ) : (
+                  <span className="text-muted">No proof</span>
+                )}
               </td>
             </tr>
           ))}

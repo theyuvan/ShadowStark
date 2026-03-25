@@ -51,9 +51,7 @@ export function useStarknet() {
    */
   const checkNullifierSpent = useCallback(
     async (nullifier: string): Promise<boolean> => {
-      // Query contract state or use view function
-      // For now: stub that checks local state
-      return false;
+      return starknetClient.checkNullifierSpent(nullifier);
     },
     []
   );
@@ -67,11 +65,7 @@ export function useStarknet() {
       merkleRoot: string;
       spentNullifiers: string[];
     }> => {
-      // Query contract for current state
-      return {
-        merkleRoot: "0x0",
-        spentNullifiers: [],
-      };
+      return starknetClient.syncChainState();
     },
     []
   );

@@ -4,10 +4,17 @@ import { Copy, ExternalLink } from "lucide-react";
 import { motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
-import type { Strategy } from "@/types";
+
+export interface StrategyCardData {
+  id: string;
+  direction: "buy" | "sell";
+  status: "active" | "pending" | "complete";
+  commitment: string;
+  createdAt: number;
+}
 
 interface StrategyCardProps {
-  strategy: Strategy & { direction: "buy" | "sell"; status: "active" | "pending" | "complete" };
+  strategy: StrategyCardData;
   onViewProof: (commitmentHash: string) => void;
 }
 
@@ -15,8 +22,7 @@ export function StrategyCard({ strategy, onViewProof }: StrategyCardProps) {
   const isBuy = strategy.direction === "buy";
   const borderColor = isBuy ? "border-emerald-500" : "border-red-500";
 
-  const commitment = Buffer.from(JSON.stringify(strategy.graph)).toString("hex").slice(0, 14);
-  const shortCommit = `0x${commitment}...${commitment.slice(-4)}`;
+  const shortCommit = `${strategy.commitment.slice(0, 14)}...${strategy.commitment.slice(-4)}`;
 
   return (
     <motion.div
@@ -80,14 +86,14 @@ export function StrategyCard({ strategy, onViewProof }: StrategyCardProps) {
         <div className="flex items-center gap-2">
           <span className="text-muted">Commitment:</span>
           <code className="font-code text-cyan-400">{shortCommit}</code>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => navigator.clipboard.writeText(commitment)}>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => navigator.clipboard.writeText(strategy.commitment)}>
             <Copy className="h-3 w-3" />
           </Button>
         </div>
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => onViewProof(commitment)}
+          onClick={() => onViewProof(strategy.commitment)}
           className="gap-1 text-xs text-primary hover:text-primary"
         >
           View proof <ExternalLink className="h-3 w-3" />

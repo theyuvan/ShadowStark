@@ -1,0 +1,6 @@
+[sncast.sepolia]
+account = "shadowflow-testnet"
+
+[sncast.sepolia.provider]
+type = "cartridge"
+network = "sepolia"

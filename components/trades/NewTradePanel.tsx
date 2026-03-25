@@ -8,26 +8,58 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import type { TradeIntentPayload } from "@/lib/otcClient";
 
 interface NewTradePanelProps {
-  onTemplateSelect?: (template: string) => void;
+  walletAddress: string | null;
+  submitting?: boolean;
+  onSubmitIntent: (payload: Omit<TradeIntentPayload, "walletAddress">) => Promise<void>;
 }
 
-export function NewTradePanel({ onTemplateSelect }: NewTradePanelProps) {
+export function NewTradePanel({ walletAddress, submitting = false, onSubmitIntent }: NewTradePanelProps) {
   const router = useRouter();
   const [direction, setDirection] = useState<"buy" | "sell">("buy");
   const [showConfig, setShowConfig] = useState(false);
+  const [templateId, setTemplateId] = useState<"simple" | "split" | "guarded">("simple");
   const [priceThreshold, setPriceThreshold] = useState<number | "">(43000);
   const [amount, setAmount] = useState<number | "">(0.1);
   const [splitCount, setSplitCount] = useState(3);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleTemplateSelect = (template: string) => {
+  const handleTemplateSelect = (template: "simple" | "split" | "guarded") => {
     setShowConfig(true);
-    onTemplateSelect?.(template);
+    setTemplateId(template);
   };
 
   const handleOpenBuilder = () => {
     router.push("/builder");
+  };
+
+  const handleCreateIntent = async () => {
+    setSubmitError(null);
+
+    if (!walletAddress) {
+      setSubmitError("Connect wallet before creating intents.");
+      return;
+    }
+
+    if (!priceThreshold || !amount) {
+      setSubmitError("Price and amount are required.");
+      return;
+    }
+
+    try {
+      await onSubmitIntent({
+        direction,
+        templateId,
+        priceThreshold,
+        amount,
+        splitCount,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to submit intent.";
+      setSubmitError(message);
+    }
   };
 
   return (
@@ -67,11 +99,11 @@ export function NewTradePanel({ onTemplateSelect }: NewTradePanelProps) {
       <div className="space-y-2">
         <Label className="text-xs uppercase tracking-widest">Quick Templates</Label>
         <div className="space-y-2">
-          {[
+          {([
             { id: "simple", name: "Simple Buy/Sell", desc: "Condition → Execute" },
             { id: "split", name: "Split & Trade", desc: "Condition → Split → Execute" },
             { id: "guarded", name: "Guarded Trade", desc: "Condition + Constraint → Split → Execute" },
-          ].map((t) => (
+          ] as const).map((t) => (
             <button
               key={t.id}
               onClick={() => handleTemplateSelect(t.id)}
@@ -126,6 +158,16 @@ export function NewTradePanel({ onTemplateSelect }: NewTradePanelProps) {
           <Button onClick={handleOpenBuilder} className="w-full">
             Open in Builder →
           </Button>
+
+          <Button onClick={handleCreateIntent} className="w-full" disabled={submitting || !walletAddress}>
+            {submitting ? "Submitting Intent..." : "Submit OTC Intent"}
+          </Button>
+
+          {!walletAddress ? (
+            <p className="text-xs text-amber-400">Wallet required for BUY/SELL intent submission.</p>
+          ) : null}
+
+          {submitError ? <p className="text-xs text-red-400">{submitError}</p> : null}
         </div>
       )}
     </div>

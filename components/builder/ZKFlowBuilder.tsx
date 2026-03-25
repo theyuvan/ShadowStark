@@ -32,6 +32,7 @@ import { compileGraphToConstraints, validateGraphAsDag } from "@/lib/graphCompil
 import { ZKConstraintPreview } from "@/components/builder/ZKConstraintPreview";
 import { validateConnection } from "@/lib/flowRules";
 import { CompileFlow } from "@/components/builder/CompileFlow";
+import { useZKStore } from "@/store/zkStore";
 
 const nodeTypes: NodeTypes = {
   condition: ConditionNode,
@@ -43,6 +44,8 @@ const nodeTypes: NodeTypes = {
 export function ZKFlowBuilder() {
   const { graph, selectedNodeId, setSelectedNode, addNode, updateNodeData, updateNodePosition, addEdge: addStoreEdge, setCommitment } =
     useStrategyStore();
+  const setCurrentProof = useZKStore((state) => state.setCurrentProof);
+  const setProofVerified = useZKStore((state) => state.setProofVerified);
 
   const [toast, setToast] = useState<string | null>(null);
   const [isCompiling, setIsCompiling] = useState(false);
@@ -213,9 +216,19 @@ export function ZKFlowBuilder() {
               setCompileStage(0);
             }}
             onCompiled={(commitment) => {
-              setCommitment(commitment);
-              setToast(`Commitment stored locally: ${commitment.slice(0, 14)}...`);
+              setCommitment(commitment.commitment);
+              setCurrentProof(commitment.proof);
+              setProofVerified(commitment.verified);
+              setToast(
+                commitment.verified
+                  ? `Proof verified and stored: ${commitment.commitment.slice(0, 14)}...`
+                  : `Proof generated but verification failed: ${commitment.commitment.slice(0, 14)}...`,
+              );
               setTimeout(() => setToast(null), 2500);
+            }}
+            onError={(message) => {
+              setToast(message);
+              setTimeout(() => setToast(null), 3500);
             }}
           />
         </div>

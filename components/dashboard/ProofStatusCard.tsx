@@ -1,9 +1,14 @@
 "use client";
 
+import { useProofStore } from "@/store/proofStore";
+
 const steps = ["Serialize", "Hash", "Prove", "Verify"];
 
 export function ProofStatusCard() {
-  const currentStep = 2; // "Prove" in progress
+  const { status, progress } = useProofStore();
+
+  const currentStep =
+    status === "idle" ? 0 : status === "generating" ? 2 : status === "verifying" ? 3 : steps.length;
 
   const circumference = 2 * Math.PI * 45;
   const offset = circumference - (currentStep / steps.length) * circumference;
@@ -39,9 +44,9 @@ export function ProofStatusCard() {
           <div className="absolute inset-0 flex items-center justify-center text-center">
             <div>
               <p className="text-2xl font-heading font-semibold text-foreground">
-                {Math.round((currentStep / steps.length) * 100)}%
+                {status === "idle" ? 0 : Math.max(progress, Math.round((currentStep / steps.length) * 100))}%
               </p>
-              <p className="text-xs text-muted">In Progress</p>
+              <p className="text-xs text-muted">{status === "complete" ? "Complete" : status === "error" ? "Error" : "In Progress"}</p>
             </div>
           </div>
         </div>

@@ -1,92 +1,107 @@
 "use client";
 
-import { useState } from "react";
-import { useStrategyStore } from "@/store/strategyStore";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useWalletStore } from "@/store/walletStore";
+import { otcClient } from "@/lib/otcClient";
 
 import { StrategyCard } from "@/components/trades/StrategyCard";
 import { ExecutionFeed } from "@/components/trades/ExecutionFeed";
 import { NewTradePanel } from "@/components/trades/NewTradePanel";
 import { TradeHistory } from "@/components/trades/TradeHistory";
 import type { ExecutionLog, TradeRecord } from "@/types";
+import type { StrategySummary } from "@/lib/otcClient";
 
 export function TradesPage() {
-  const { graph } = useStrategyStore();
   const [activeTab, setActiveTab] = useState<"active" | "completed" | "pending">("active");
+  const { connected, address } = useWalletStore();
+  const [strategies, setStrategies] = useState<StrategySummary[]>([]);
+  const [logs, setLogs] = useState<ExecutionLog[]>([]);
+  const [trades, setTrades] = useState<TradeRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Mock data for demo
-  const mockExecutionLogs: ExecutionLog[] = [
-    {
-      stepIndex: 0,
-      nodeId: "node-1",
-      action: "CONDITION_CHECK",
-      maskedAmount: "***",
-      timestamp: Date.now() - 5000,
-      constraintsSatisfied: true,
-      witnessGenerated: true,
-    },
-    {
-      stepIndex: 1,
-      nodeId: "node-2",
-      action: "SPLIT",
-      maskedAmount: "***",
-      timestamp: Date.now() - 3000,
-      constraintsSatisfied: true,
-      witnessGenerated: true,
-    },
-    {
-      stepIndex: 2,
-      nodeId: "node-3",
-      action: "EXECUTE",
-      maskedAmount: "***",
-      timestamp: Date.now() - 1000,
-      constraintsSatisfied: true,
-      witnessGenerated: true,
-    },
-  ];
+  const reloadData = useCallback(async () => {
+    if (!address || !connected) {
+      setStrategies([]);
+      setLogs([]);
+      setTrades([]);
+      return;
+    }
 
-  const mockActiveStrategies = [
-    {
-      id: "strat-1",
-      graph,
-      salt: "shadowflow",
-      createdAt: Date.now() - 3600000,
-      direction: "buy" as const,
-      status: "active" as const,
-    },
-    {
-      id: "strat-2",
-      graph,
-      salt: "shadowflow-2",
-      createdAt: Date.now() - 7200000,
-      direction: "sell" as const,
-      status: "pending" as const,
-    },
-  ];
+    if (!otcClient.isConfigured()) {
+      setErrorMessage("Real mode requires NEXT_PUBLIC_ENABLE_REAL_EXECUTION=true and NEXT_PUBLIC_EXECUTION_API_URL.");
+      setStrategies([]);
+      setLogs([]);
+      setTrades([]);
+      return;
+    }
 
-  const mockTradeHistory: TradeRecord[] = [
-    {
-      id: "trade-1",
-      direction: "buy",
-      status: "complete",
-      createdAt: Date.now() - 86400000,
-      commitment: "0x3f2a5bc81098765432abcdef3f2a5bc8",
-      proofHash: "0xabc123def456",
-      maskedAmount: "***",
-      maskedPrice: "***",
-      usesTEE: false,
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      const [nextStrategies, nextLogs, nextTrades] = await Promise.all([
+        otcClient.listStrategies(address),
+        otcClient.listExecutionLogs(address),
+        otcClient.listTrades(address),
+      ]);
+      setStrategies(nextStrategies);
+      setLogs(nextLogs);
+      setTrades(nextTrades);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load trade data.";
+      setErrorMessage(message);
+      setStrategies([]);
+      setLogs([]);
+      setTrades([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [address, connected]);
+
+  useEffect(() => {
+    void reloadData();
+  }, [reloadData]);
+
+  const filteredStrategies = useMemo(
+    () =>
+      strategies.filter((s) => {
+        if (activeTab === "active") return s.status === "active";
+        if (activeTab === "pending") return s.status === "pending";
+        return s.status === "complete";
+      }),
+    [activeTab, strategies],
+  );
+
+  const handleSubmitIntent = useCallback(
+    async (payload: { direction: "buy" | "sell"; templateId: "simple" | "split" | "guarded"; priceThreshold: number; amount: number; splitCount: number }) => {
+      if (!address) {
+        throw new Error("Wallet not connected.");
+      }
+
+      setSubmitting(true);
+      setErrorMessage(null);
+      try {
+        await otcClient.submitIntent({ ...payload, walletAddress: address });
+        await reloadData();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Intent submission failed.";
+        setErrorMessage(message);
+        throw error;
+      } finally {
+        setSubmitting(false);
+      }
     },
-    {
-      id: "trade-2",
-      direction: "sell",
-      status: "complete",
-      createdAt: Date.now() - 172800000,
-      commitment: "0x2e1b9cd7987654321fedcba2e1b9cd79",
-      proofHash: "0xdef789abc012",
-      maskedAmount: "***",
-      maskedPrice: "***",
-      usesTEE: false,
-    },
-  ];
+    [address, reloadData],
+  );
+
+  const handleOpenProof = useCallback((proofHash: string) => {
+    if (!proofHash) {
+      return;
+    }
+    const baseUrl = process.env.NEXT_PUBLIC_STARKSCAN_TX_BASE_URL || "https://sepolia.starkscan.co/tx";
+    window.open(`${baseUrl}/${proofHash}`, "_blank", "noopener,noreferrer");
+  }, []);
 
   return (
     <main className="space-y-4 p-4">
@@ -99,14 +114,24 @@ export function TradesPage() {
           </div>
           <div className="flex items-center gap-2 text-[11px]">
             <span className="rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-primary">
-              {mockActiveStrategies.length} ACTIVE
+              {strategies.filter((s) => s.status === "active").length} ACTIVE
             </span>
             <span className="rounded-md border border-amber/30 bg-amber/10 px-2 py-1 text-amber-400">
-              {mockTradeHistory.length} COMPLETED
+              {trades.filter((t) => t.status === "complete").length} COMPLETED
             </span>
           </div>
         </div>
       </section>
+
+      {errorMessage ? (
+        <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-300">{errorMessage}</div>
+      ) : null}
+
+      {!connected ? (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300">
+          Connect wallet to load live BUY/SELL OTC intents and execute trades.
+        </div>
+      ) : null}
 
       {/* Main Content: 60/40 split */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_0.65fr]">
@@ -135,20 +160,21 @@ export function TradesPage() {
 
           {/* Strategy Cards */}
           <div className="space-y-3">
-            {mockActiveStrategies
-              .filter(
-                (s) =>
-                  activeTab === "active" ? s.status === "active" : s.status === "pending"
-              )
-              .map((strategy) => (
+            {loading ? (
+              <div className="rounded-xl border border-border/50 bg-surface/50 p-4 text-xs text-muted">Loading strategies...</div>
+            ) : filteredStrategies.length ? (
+              filteredStrategies.map((strategy) => (
                 <StrategyCard
                   key={strategy.id}
                   strategy={strategy}
-                  onViewProof={() => {
-                    // TODO: Show proof inspector modal
-                  }}
+                  onViewProof={handleOpenProof}
                 />
-              ))}
+              ))
+            ) : (
+              <div className="rounded-xl border border-border/50 bg-surface/50 p-4 text-xs text-muted">
+                No strategies found for this tab.
+              </div>
+            )}
           </div>
 
           {/* Execution Feed */}
@@ -157,7 +183,7 @@ export function TradesPage() {
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               Live Execution Feed
             </h3>
-            <ExecutionFeed logs={mockExecutionLogs} />
+            <ExecutionFeed logs={logs} />
           </div>
         </div>
 
@@ -166,10 +192,10 @@ export function TradesPage() {
           {/* Quick Stats */}
           <div className="grid grid-cols-2 gap-2">
             {[
-              { label: "Total Committed", value: "2" },
-              { label: "Proofs Verified", value: "2" },
-              { label: "BTC Volume", value: "████" },
-              { label: "Active Nullifiers", value: "8" },
+              { label: "Total Committed", value: String(strategies.length) },
+              { label: "Proofs Verified", value: String(trades.filter((t) => Boolean(t.proofHash)).length) },
+              { label: "BTC Volume", value: trades.length ? "LIVE" : "0" },
+              { label: "Active Nullifiers", value: String(logs.filter((l) => l.witnessGenerated).length) },
             ].map((stat, idx) => (
               <div
                 key={idx}
@@ -182,14 +208,21 @@ export function TradesPage() {
           </div>
 
           {/* New Trade Panel */}
-          <NewTradePanel />
+          <NewTradePanel walletAddress={address} submitting={submitting} onSubmitIntent={handleSubmitIntent} />
         </div>
       </div>
 
       {/* Bottom: Trade History */}
       <div className="space-y-2">
         <h3 className="text-sm font-semibold">Trade History</h3>
-        <TradeHistory trades={mockTradeHistory} />
+        <TradeHistory
+          trades={trades}
+          onViewProof={(trade) => {
+            if (trade.proofHash) {
+              handleOpenProof(trade.proofHash);
+            }
+          }}
+        />
       </div>
     </main>
   );

@@ -1,10 +1,10 @@
 #[starknet::contract]
 mod GaragaVerifier {
-    use starknet::storage::LegacyMap;
+    use starknet::storage::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, StorageMapReadAccess, StorageMapWriteAccess};
 
     #[storage]
     struct Storage {
-        allowed_proofs: LegacyMap<felt252, bool>,
+        allowed_proofs: Map<felt252, bool>,
     }
 
     #[event]

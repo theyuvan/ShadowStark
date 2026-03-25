@@ -1,18 +1,17 @@
 "use client";
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import type { ExecutionLog } from "@/types";
 
-const data = [
-  { step: "1", activity: 2 },
-  { step: "2", activity: 5 },
-  { step: "3", activity: 3 },
-  { step: "4", activity: 7 },
-  { step: "5", activity: 4 },
-  { step: "6", activity: 6 },
-  { step: "7", activity: 2 },
-];
+interface ExecutionTimelineProps {
+  logs: ExecutionLog[];
+}
 
-export function ExecutionTimeline() {
+export function ExecutionTimeline({ logs }: ExecutionTimelineProps) {
+  const data = logs.length
+    ? logs.map((log) => ({ step: String(log.stepIndex + 1), activity: log.constraintsSatisfied ? 1 : 0 }))
+    : [{ step: "0", activity: 0 }];
+
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
       <h3 className="mb-4 font-heading text-sm font-semibold">Execution Timeline</h3>

@@ -1,7 +1,7 @@
 #[starknet::contract]
 mod ShadowFlow {
     use starknet::ContractAddress;
-    use starknet::storage::LegacyMap;
+    use starknet::storage::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, StorageMapReadAccess, StorageMapWriteAccess};
 
     #[starknet::interface]
     trait IGaragaVerifier<TContractState> {
@@ -10,10 +10,10 @@ mod ShadowFlow {
 
     #[storage]
     struct Storage {
-        commitments: LegacyMap<ContractAddress, felt252>,
-        final_states: LegacyMap<ContractAddress, felt252>,
+        commitments: Map<ContractAddress, felt252>,
+        final_states: Map<ContractAddress, felt252>,
         merkle_root: felt252,
-        spent_nullifiers: LegacyMap<felt252, bool>,
+        spent_nullifiers: Map<felt252, bool>,
         verifier: ContractAddress,
     }
 
@@ -80,17 +80,17 @@ mod ShadowFlow {
         self.emit(Event::ExecutionVerified(ExecutionVerified { user: caller, final_state_hash, nullifier }));
     }
 
-    #[view]
+    #[external(v0)]
     fn get_commitment(self: @ContractState, user: ContractAddress) -> felt252 {
         self.commitments.read(user)
     }
 
-    #[view]
+    #[external(v0)]
     fn is_nullifier_spent(self: @ContractState, nullifier: felt252) -> bool {
         self.spent_nullifiers.read(nullifier)
     }
 
-    #[view]
+    #[external(v0)]
     fn get_merkle_root(self: @ContractState) -> felt252 {
         self.merkle_root.read()
     }
