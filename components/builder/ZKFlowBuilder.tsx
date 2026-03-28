@@ -25,6 +25,7 @@ import { ConditionNode } from "@/components/nodes/ConditionNode";
 import { ConstraintNode } from "@/components/nodes/ConstraintNode";
 import { ExecuteNode } from "@/components/nodes/ExecuteNode";
 import { SplitNode } from "@/components/nodes/SplitNode";
+import { BtcTransferNode } from "@/components/nodes/BtcTransferNode";
 import { useStrategyStore } from "@/store/strategyStore";
 import { GraphValidator } from "@/components/builder/GraphValidator";
 import { CompileButton } from "@/components/builder/CompileButton";
@@ -41,11 +42,12 @@ const nodeTypes: NodeTypes = {
   split: SplitNode,
   execute: ExecuteNode,
   constraint: ConstraintNode,
+  btc_transfer: BtcTransferNode,
 };
 
 const templatePathValid = (
   template: "simple" | "split" | "guarded" | null,
-  nodeTypesList: Array<"condition" | "split" | "execute" | "constraint">,
+  nodeTypesList: Array<"condition" | "split" | "execute" | "constraint" | "btc_transfer">,
 ) => {
   if (!template) {
     return true;
@@ -68,7 +70,7 @@ const templatePathValid = (
 };
 
 export function ZKFlowBuilder() {
-  const { graph, selectedNodeId, setSelectedNode, addNode, updateNodeData, updateNodePosition, addEdge: addStoreEdge, setCommitment } =
+  const { graph, selectedNodeId, setSelectedNode, addNode, updateNodeData, updateNodePosition, addEdge: addStoreEdge, setCommitment, seedFromTemplate } =
     useStrategyStore();
   const setCurrentProof = useZKStore((state) => state.setCurrentProof);
   const setProofVerified = useZKStore((state) => state.setProofVerified);
@@ -184,6 +186,23 @@ export function ZKFlowBuilder() {
       y: event.clientY - bounds.top - 24,
     });
   };
+
+  // ── Auto-seed from URL params (only runs once on mount when graph is empty) ──
+  useEffect(() => {
+    if (graph.nodes.length > 0) return; // never overwrite manual work
+    const tpl = searchParams.get("template");
+    const dir = searchParams.get("direction");
+    if (!tpl || !dir) return;
+
+    const template = (tpl === "simple" || tpl === "split" || tpl === "guarded") ? tpl : "simple";
+    const direction = dir === "sell" ? "sell" : "buy";
+    const amount = Number.parseFloat(searchParams.get("amount") ?? "0.1");
+    const price = Number.parseFloat(searchParams.get("priceThreshold") ?? "60000");
+    const splitCount = Number.parseInt(searchParams.get("splitCount") ?? "3", 10);
+
+    seedFromTemplate({ template, direction, amount, price, splitCount });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — only run on first mount
 
   useEffect(() => {
     if (!isCompiling) {

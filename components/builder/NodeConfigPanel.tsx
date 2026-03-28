@@ -54,7 +54,77 @@ export function NodeConfigPanel({ node, onUpdate }: Props) {
     onUpdate(node.id, { [key]: value });
   };
 
-  const isPrivateField = (key: string) => ["price", "splitCount", "amount", "delayMs", "value"].includes(key);
+  // ── BTC Transfer node: dedicated HTLC form ───────────────────────────────────
+  if (node.type === "btc_transfer") {
+    const btcData = node.data as { fromAddress?: string; toAddress?: string; btcAmount?: number; htlcTimelock?: number; commitment?: string };
+    return (
+      <div className="w-[280px] border-l border-border bg-surface p-4 space-y-4">
+        <h3 className="font-heading text-lg font-bold flex items-center gap-2">
+          <span style={{ color: "#F7931A" }}>₿</span> BTC Transfer
+        </h3>
+
+        {/* Private fields */}
+        <div className="space-y-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted">Private 🔒</p>
+          <div className="space-y-1">
+            <Label className="text-xs">From Address (BTC)</Label>
+            <div className="rounded-md border border-border bg-elevated px-3 py-2 font-mono text-xs text-muted">████████████████████████████████</div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">To Address (BTC)</Label>
+            <div className="rounded-md border border-border bg-elevated px-3 py-2 font-mono text-xs text-muted">████████████████████████████████</div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Amount (BTC)</Label>
+            <div className="rounded-md border border-border bg-elevated px-3 py-2 font-mono text-xs text-muted">████ BTC</div>
+          </div>
+        </div>
+
+        {/* Public fields */}
+        <div className="space-y-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted">Public ✅</p>
+          <div className="space-y-1">
+            <Label className="text-xs">HTLC Timelock (blocks)</Label>
+            <Input
+              type="number"
+              defaultValue={btcData.htlcTimelock ?? 144}
+              min={6}
+              max={1008}
+              onChange={(e) => onUpdate(node.id, { htlcTimelock: Number(e.target.value) })}
+              className="text-sm"
+            />
+            <p className="text-[10px] text-muted">144 blocks ≈ 24h at 10 min/block on Bitcoin testnet4</p>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Commitment Hash</Label>
+            <div
+              className="rounded-md border border-border bg-elevated px-3 py-2 font-mono text-[10px] break-all"
+              style={{ color: "#F7931A" }}
+            >
+              {btcData.commitment ?? "0x0000000000000000"}
+            </div>
+            <p className="text-[10px] text-muted">Poseidon(secret, nullifier) — stored on Starknet SimpleMixer</p>
+          </div>
+        </div>
+
+        {/* Mempool explorer link */}
+        {btcData.fromAddress ? (
+          <a
+            href={`${process.env.NEXT_PUBLIC_BTC_EXPLORER_URL ?? "https://mempool.space/testnet4"}/address/${btcData.fromAddress}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block text-[10px] text-[#F7931A] underline underline-offset-2"
+          >
+            View on Mempool.space ↗
+          </a>
+        ) : (
+          <p className="text-[10px] text-muted">Connect Xverse to populate addresses</p>
+        )}
+      </div>
+    );
+  }
+
+  // ── Generic node config ───────────────────────────────────────────────────────
 
   return (
     <div className="w-[280px] border-l border-border bg-surface p-4">
@@ -67,6 +137,7 @@ export function NodeConfigPanel({ node, onUpdate }: Props) {
 
       <div className="space-y-4">
         {Object.entries(node.data).map(([key, value]) => {
+          const isPrivateField = (k: string) => ["price", "splitCount", "amount", "delayMs", "value"].includes(k);
           const privateField = isPrivateField(key);
           const visibleValue = privateField && !showPrivate ? "████" : value;
 

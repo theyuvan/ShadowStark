@@ -5,15 +5,32 @@ const constraintByType = {
   split: "sum_partition",
   execute: "state_transition",
   constraint: "assertion",
+  btc_transfer: "asset_commitment",
 } as const;
+
+const sizeByType: Record<string, number> = {
+  condition: 256,
+  split: 256,
+  execute: 256,
+  constraint: 256,
+  btc_transfer: 512, // HTLC + Merkle path adds more constraints
+};
 
 export function compileGraphToConstraints(graph: NodeGraph): ZKConstraint[] {
   return graph.nodes.map((node) => ({
     nodeId: node.id,
     constraintType: constraintByType[node.type],
-    publicInputs: [node.type, node.id],
+    publicInputs: [
+      node.type,
+      node.id,
+      // For btc_transfer, expose commitment and timelock as public inputs
+      ...(node.type === "btc_transfer"
+        ? [(node.data as { commitment?: string }).commitment ?? "0x0",
+           String((node.data as { htlcTimelock?: number }).htlcTimelock ?? 144)]
+        : []),
+    ],
     privateWitness: [JSON.stringify(node.data)], // PRIVATE — never log or transmit
-    estimatedSize: 256,
+    estimatedSize: sizeByType[node.type] ?? 256,
   }));
 }
 

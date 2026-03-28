@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { GitBranch, Shield, Shuffle, Zap } from "lucide-react";
+import { Bitcoin, GitBranch, Shield, Shuffle, Zap } from "lucide-react";
 
 import type { NodeType } from "@/types";
 
@@ -44,5 +44,13 @@ export const NODE_CONFIGS: Record<NodeType, NodeConfig> = {
     icon: Shield,
     zkLabel: "Assertion",
     description: "Add rule / guard",
+  },
+  btc_transfer: {
+    type: "btc_transfer",
+    label: "BTC Transfer",
+    color: "#F7931A",
+    icon: Bitcoin,
+    zkLabel: "HTLC Commitment",
+    description: "Lock BTC via HTLC → Starknet commitment",
   },
 };
