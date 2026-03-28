@@ -64,6 +64,14 @@ export interface MerkleProof {
   treeDepth: number;
 }
 
+export interface ProofMerklePath {
+  leaf: string;
+  pathElements: string[];
+  pathIndices: number[];
+  root: string;
+  treeDepth: number;
+}
+
 export interface RangeProofWitness {
   bits: bigint[]; // PRIVATE: bit decomposition
   blindingFactor: bigint; // PRIVATE
@@ -108,6 +116,7 @@ export interface ZKProof {
   timestamp: number;
   artifactFile?: string;
   teeAttested?: boolean;
+  merklePath?: ProofMerklePath;
 }
 
 export interface AggregatedProof {
@@ -143,14 +152,34 @@ export interface TEEAttestation {
   valid: boolean;
 }
 
+export type OtcLifecycleStatus = "open" | "matched" | "settled";
+
+export interface OtcMatchRecord {
+  id: string;
+  buyerWallet: string;
+  sellerWallet: string;
+  buyTradeId: string;
+  sellTradeId: string;
+  amount: number;
+  price: number;
+  createdAt: number;
+  settlementCommitment: string;
+  proofHash?: string;
+  status: "matched" | "settled";
+}
+
 export interface TradeRecord {
   id: string;
   direction: "buy" | "sell";
-  status: "active" | "pending" | "complete";
+  status: OtcLifecycleStatus;
   createdAt: number;
   commitment: string;
   proofHash?: string;
   maskedAmount: string; // PRIVATE — never log or transmit
   maskedPrice: string; // PRIVATE — never log or transmit
   usesTEE: boolean;
+  remainingAmount?: number;
+  matchedAmount?: number;
+  counterpartyWallet?: string;
+  settlementCommitment?: string;
 }

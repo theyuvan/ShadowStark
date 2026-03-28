@@ -97,6 +97,7 @@ Zero-knowledge private Bitcoin strategy execution on Starknet.
   - `NEXT_PUBLIC_STARKNET_NETWORK=sepolia`
   - `NEXT_PUBLIC_STARKNET_RPC_URL=https://starknet-sepolia.public.blastapi.io/rpc/v0_8`
   - `NEXT_PUBLIC_EXECUTION_API_URL`
+    - `STARKNET_EXECUTOR_ADDRESS` and `STARKNET_EXECUTOR_PRIVATE_KEY`
   - `NEXT_PUBLIC_ENABLE_REAL_EXECUTION=true` (for real mode)
   - `NEXT_PUBLIC_STARKSCAN_TX_BASE_URL=https://sepolia.starkscan.co/tx`
 
@@ -115,8 +116,11 @@ Expected execution API endpoints:
 - `GET /wallet/balances?walletAddress=...`
 - `POST /commitment/store`
 - `POST /proof/verify-and-store`
+- `POST /proof/register-valid`
 - `GET /nullifier/spent?nullifier=...`
 - `GET /chain/state`
+
+When `NEXT_PUBLIC_EXECUTION_API_URL=http://localhost:3000/api`, these are served by Next API routes in this repository.
 
 ## External ZK Circuit Compilation (`C:\zk-affordability-loan`)
 

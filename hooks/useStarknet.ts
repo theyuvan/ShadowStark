@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { starknetClient } from "@/lib/starknetClient";
 import { ZKProof } from "@/types";
+import { getProofPublicInputsHash } from "@/lib/zk/publicInputs";
 
 /**
  * useStarknet: Hook for on-chain verification and settlement.
@@ -24,11 +25,34 @@ export function useStarknet() {
   const verifyAndExecuteProof = useCallback(
     async (proof: ZKProof) => {
       try {
+        const publicInputsHash = getProofPublicInputsHash(proof);
+        const executionApiKey = process.env.NEXT_PUBLIC_EXECUTION_API_KEY;
+
+        const registerResponse = await fetch("/api/proof/register-valid", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(executionApiKey ? { "x-api-key": executionApiKey } : {}),
+          },
+          body: JSON.stringify({
+            proofHash: proof.proofHash,
+            publicInputsHash,
+            finalStateHash: proof.finalStateHash,
+            nullifier: proof.nullifier,
+          }),
+        });
+
+        if (!registerResponse.ok) {
+          throw new Error("Failed to register valid proof with backend execution gateway.");
+        }
+
         // Call Starknet contract to verify proof and execute strategy
-        const result = await starknetClient.verifyAndStore(
-          proof.proofHash,
-          proof.finalStateHash
-        );
+        const result = await starknetClient.verifyAndStore({
+          proofHash: proof.proofHash,
+          publicInputsHash,
+          finalStateHash: proof.finalStateHash,
+          nullifier: proof.nullifier,
+        });
 
         // Contract will:
         // 1. Call Garaga verifier to check STARK proof

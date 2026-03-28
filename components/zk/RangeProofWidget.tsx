@@ -21,10 +21,8 @@ export function RangeProofWidget({
   valueCommitment,
   proofGenerated,
 }: RangeProofWidgetProps) {
-  // Estimate bounds position (don't reveal actual values)
-  const estimatedLowerPos = 20; // Visual position only, not actual value
-  const estimatedUpperPos = 80;
-  const estimatedValuePos = 50; // Visual position only
+  const normalized = Number.parseInt(valueCommitment.slice(2, 6) || "0", 16);
+  const abstractValuePos = 20 + (normalized % 60);
 
 
   return (
@@ -47,21 +45,18 @@ export function RangeProofWidget({
 
         {/* Number Line Visualization */}
         <div className="space-y-2">
-          <div className="text-xs text-[#888899]">Valid Range Zone (bounds PRIVATE)</div>
+          <div className="text-xs text-[#888899]">Range proof envelope (privacy-safe abstraction)</div>
           <div className="relative h-12 bg-[#080810] rounded border border-[#2A2A3E] overflow-hidden">
             {/* Track background */}
             <div
               className="absolute inset-y-0 bg-gradient-to-r from-[#FF550033] to-[#00FF8833]"
-              style={{
-                left: `${estimatedLowerPos}%`,
-                right: `${100 - estimatedUpperPos}%`,
-              }}
+              style={{ left: "18%", right: "18%" }}
             />
 
             {/* Bounds markers (visual only, values not shown) */}
             <motion.div
               className="absolute top-1/2 transform -translate-y-1/2 w-1 h-8 bg-[#FF5500] rounded"
-              style={{ left: `${estimatedLowerPos}%` }}
+              style={{ left: "18%" }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.6 }}
               transition={{ delay: 0.3 }}
@@ -69,7 +64,7 @@ export function RangeProofWidget({
 
             <motion.div
               className="absolute top-1/2 transform -translate-y-1/2 w-1 h-8 bg-[#FF5500] rounded"
-              style={{ right: `${100 - estimatedUpperPos}%` }}
+              style={{ right: "18%" }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.6 }}
               transition={{ delay: 0.4 }}
@@ -78,7 +73,7 @@ export function RangeProofWidget({
             {/* Value indicator (hidden, but shown as position) */}
             <motion.div
               className="absolute top-1/2 transform -translate-y-1/2 w-3 h-3 bg-[#00FF88] rounded-full shadow-lg"
-              style={{ left: `${estimatedValuePos}%`, marginLeft: "-6px" }}
+              style={{ left: `${abstractValuePos}%`, marginLeft: "-6px" }}
               animate={{
                 boxShadow: [
                   "0 0 0 0 rgba(0, 255, 136, 0.7)",
@@ -91,7 +86,7 @@ export function RangeProofWidget({
             {/* Tooltip on hover */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="text-xs font-mono text-[#00FF88]">
-                ████ (value hidden)
+                value private
               </div>
             </div>
           </div>

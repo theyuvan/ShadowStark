@@ -12,11 +12,19 @@ import type { TradeIntentPayload } from "@/lib/otcClient";
 
 interface NewTradePanelProps {
   walletAddress: string | null;
+  btcBalance: string;
+  strkBalance: string;
   submitting?: boolean;
-  onSubmitIntent: (payload: Omit<TradeIntentPayload, "walletAddress">) => Promise<void>;
+  onSubmitIntent: (payload: Omit<TradeIntentPayload, "walletAddress" | "walletAuth">) => Promise<void>;
 }
 
-export function NewTradePanel({ walletAddress, submitting = false, onSubmitIntent }: NewTradePanelProps) {
+export function NewTradePanel({
+  walletAddress,
+  btcBalance,
+  strkBalance,
+  submitting = false,
+  onSubmitIntent,
+}: NewTradePanelProps) {
   const router = useRouter();
   const [direction, setDirection] = useState<"buy" | "sell">("buy");
   const [showConfig, setShowConfig] = useState(false);
@@ -24,15 +32,34 @@ export function NewTradePanel({ walletAddress, submitting = false, onSubmitInten
   const [priceThreshold, setPriceThreshold] = useState<number | "">(43000);
   const [amount, setAmount] = useState<number | "">(0.1);
   const [splitCount, setSplitCount] = useState(3);
+  const [depositConfirmed, setDepositConfirmed] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const parsedBtcBalance = Number.parseFloat(btcBalance || "0");
+  const parsedStrkBalance = Number.parseFloat(strkBalance || "0");
+  const numericAmount = typeof amount === "number" ? amount : 0;
+  const depositAvailable =
+    direction === "sell"
+      ? parsedBtcBalance >= numericAmount && numericAmount > 0
+      : parsedStrkBalance > 0 && numericAmount > 0;
+  const selectedPath = `${templateId}:${direction}`;
 
   const handleTemplateSelect = (template: "simple" | "split" | "guarded") => {
     setShowConfig(true);
     setTemplateId(template);
+    setDepositConfirmed(false);
   };
 
   const handleOpenBuilder = () => {
-    router.push("/builder");
+    const query = new URLSearchParams({
+      template: templateId,
+      direction,
+      amount: `${numericAmount}`,
+      splitCount: `${splitCount}`,
+      selectedPath,
+      deposit: depositConfirmed && depositAvailable ? "1" : "0",
+    });
+    router.push(`/builder?${query.toString()}`);
   };
 
   const handleCreateIntent = async () => {
@@ -48,6 +75,11 @@ export function NewTradePanel({ walletAddress, submitting = false, onSubmitInten
       return;
     }
 
+    if (!depositConfirmed || !depositAvailable) {
+      setSubmitError("Deposit confirmation required before private OTC intent submission.");
+      return;
+    }
+
     try {
       await onSubmitIntent({
         direction,
@@ -55,6 +87,9 @@ export function NewTradePanel({ walletAddress, submitting = false, onSubmitInten
         priceThreshold,
         amount,
         splitCount,
+        selectedPath,
+        depositConfirmed: true,
+        depositAmount: amount,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to submit intent.";
@@ -155,11 +190,35 @@ export function NewTradePanel({ walletAddress, submitting = false, onSubmitInten
             />
           </div>
 
+          <div className="rounded-lg border border-border bg-background/50 p-3 text-xs">
+            <p className="font-semibold text-foreground">privOTC Path Lock</p>
+            <p className="mt-1 text-muted">Only this path executes: <span className="font-code text-cyan-400">{selectedPath}</span></p>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-muted">Deposit available</span>
+              <span className={depositAvailable ? "text-emerald-400" : "text-amber-400"}>
+                {depositAvailable ? "Yes" : "No"}
+              </span>
+            </div>
+            <label className="mt-2 flex items-center gap-2 text-foreground">
+              <input
+                type="checkbox"
+                checked={depositConfirmed}
+                onChange={(event) => setDepositConfirmed(event.target.checked)}
+                disabled={!depositAvailable}
+              />
+              I confirm deposited value is reserved for this intent
+            </label>
+          </div>
+
           <Button onClick={handleOpenBuilder} className="w-full">
             Open in Builder →
           </Button>
 
-          <Button onClick={handleCreateIntent} className="w-full" disabled={submitting || !walletAddress}>
+          <Button
+            onClick={handleCreateIntent}
+            className="w-full"
+            disabled={submitting || !walletAddress || !depositConfirmed || !depositAvailable}
+          >
             {submitting ? "Submitting Intent..." : "Submit OTC Intent"}
           </Button>
 

@@ -8,27 +8,27 @@ import { MerkleTreeVisualizer, NullifierStatus, ProofInspector, RangeProofWidget
 import { useWalletStore } from "@/store/walletStore";
 import { useZKStore } from "@/store/zkStore";
 import { otcClient } from "@/lib/otcClient";
-import type { TEEAttestation } from "@/types";
+import type { TEEAttestation, ZKProof } from "@/types";
+
+interface LatestProofResponse {
+  fileName: string;
+  generatedAt: string | null;
+  proof: ZKProof | null;
+}
 
 export default function SimulatePage() {
   const { address, connected } = useWalletStore();
   const currentProof = useZKStore((state) => state.currentProof);
+  const setCurrentProof = useZKStore((state) => state.setCurrentProof);
   const spentNullifiers = useZKStore((state) => state.spentNullifiers);
+  const merkleDepth = useZKStore((state) => state.merkleDepth);
+  const merkleLeafCount = useZKStore((state) => state.merkleLeafCount);
   const [attestation, setAttestation] = useState<TEEAttestation | null>(null);
 
   useEffect(() => {
     const run = async () => {
       if (!connected || !address || !otcClient.isConfigured()) {
-        if (currentProof?.teeAttested) {
-          setAttestation({
-            enclaveType: "Nitro",
-            measurementHash: currentProof.proofHash,
-            timestamp: currentProof.timestamp,
-            valid: true,
-          });
-        } else {
-          setAttestation(null);
-        }
+        setAttestation(null);
         return;
       }
 
@@ -41,7 +41,31 @@ export default function SimulatePage() {
     };
 
     void run();
-  }, [address, connected, currentProof]);
+  }, [address, connected]);
+
+  useEffect(() => {
+    const loadLatestProof = async () => {
+      if (currentProof) {
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/proofs?latest=1", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as LatestProofResponse | null;
+        if (data?.proof) {
+          setCurrentProof(data.proof);
+        }
+      } catch {
+        // Non-blocking; simulation UI can still render without a loaded proof.
+      }
+    };
+
+    void loadLatestProof();
+  }, [currentProof, setCurrentProof]);
 
   const isSpent = currentProof?.nullifier
     ? spentNullifiers.includes(BigInt(currentProof.nullifier))
@@ -49,7 +73,7 @@ export default function SimulatePage() {
 
   return (
     <div className="space-y-6 p-4">
-      <ExecutionVisualizer />
+      <ExecutionVisualizer proof={currentProof} />
 
       <section className="grid gap-4 xl:grid-cols-2">
         <TEEAttestationCard attestation={attestation} />
@@ -67,9 +91,10 @@ export default function SimulatePage() {
         />
         <MerkleTreeVisualizer
           root={currentProof?.merkleRoot ? BigInt(currentProof.merkleRoot) : 0n}
-          leafCount={currentProof ? 1 : 0}
-          depth={3}
+          leafCount={Math.max(merkleLeafCount, currentProof ? 1 : 0)}
+          depth={merkleDepth}
           highlightedLeaf={currentProof ? 0 : undefined}
+          merklePath={currentProof?.merklePath}
         />
       </section>
 

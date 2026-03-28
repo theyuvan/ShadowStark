@@ -1,4 +1,4 @@
-import type { ExecutionLog, TEEAttestation, TradeRecord, ZKProof } from "@/types";
+import type { ExecutionLog, OtcLifecycleStatus, OtcMatchRecord, TEEAttestation, TradeRecord, ZKProof } from "@/types";
 
 export interface TradeIntentPayload {
   walletAddress: string;
@@ -7,12 +7,20 @@ export interface TradeIntentPayload {
   priceThreshold: number;
   amount: number;
   splitCount: number;
+  selectedPath: string;
+  depositConfirmed: boolean;
+  depositAmount: number;
+  walletAuth?: {
+    nonce: string;
+    signature: string;
+    signedAt: number;
+  };
 }
 
 export interface StrategySummary {
   id: string;
   direction: "buy" | "sell";
-  status: "active" | "pending" | "complete";
+  status: OtcLifecycleStatus;
   commitment: string;
   createdAt: number;
 }
@@ -89,6 +97,10 @@ export const otcClient = {
 
   listExecutionLogs(walletAddress: string): Promise<ExecutionLog[]> {
     return request(`/otc/execution-logs?walletAddress=${encodeURIComponent(walletAddress)}`);
+  },
+
+  listMatches(walletAddress: string): Promise<OtcMatchRecord[]> {
+    return request(`/otc/matches?walletAddress=${encodeURIComponent(walletAddress)}`);
   },
 
   getLatestProof(walletAddress: string): Promise<ZKProof | null> {

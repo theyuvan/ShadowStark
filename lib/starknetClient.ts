@@ -20,6 +20,13 @@ export interface ProofVerificationResult {
   timestamp: number;
 }
 
+export interface VerifyAndStorePayload {
+  proofHash: string;
+  publicInputsHash: string;
+  finalStateHash: string;
+  nullifier: string;
+}
+
 interface ChainStateResponse {
   merkleRoot: string;
   spentNullifiers: string[];
@@ -31,13 +38,27 @@ export class ShadowFlowStarknetClient {
   private realExecutionEnabled: boolean;
   private verifierAddress: string;
   private shadowflowAddress: string;
+  private executionApiKey?: string;
 
   constructor(rpcUrl = DEFAULT_RPC) {
     this.provider = new RpcProvider({ nodeUrl: rpcUrl });
     this.executionApiUrl = process.env.NEXT_PUBLIC_EXECUTION_API_URL;
     this.realExecutionEnabled = process.env.NEXT_PUBLIC_ENABLE_REAL_EXECUTION === "true";
+    this.executionApiKey = process.env.NEXT_PUBLIC_EXECUTION_API_KEY;
     this.verifierAddress = VERIFIER_ADDRESS;
     this.shadowflowAddress = SHADOWFLOW_ADDRESS;
+  }
+
+  private getExecutionHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (this.executionApiKey) {
+      headers["x-api-key"] = this.executionApiKey;
+    }
+
+    return headers;
   }
 
   /**
@@ -161,7 +182,7 @@ export class ShadowFlowStarknetClient {
 
     const response = await fetch(`${this.executionApiUrl}/commitment/store`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.getExecutionHeaders(),
       body: JSON.stringify({ commitment }),
     });
 
@@ -173,7 +194,7 @@ export class ShadowFlowStarknetClient {
     return data;
   }
 
-  async verifyAndStore(proofHash: string, finalStateHash: string): Promise<VerificationReceipt> {
+  async verifyAndStore(payload: VerifyAndStorePayload): Promise<VerificationReceipt> {
     if (!this.realExecutionEnabled) {
       throw new Error(
         "Real execution is disabled. Set NEXT_PUBLIC_ENABLE_REAL_EXECUTION=true and configure NEXT_PUBLIC_EXECUTION_API_URL."
@@ -186,8 +207,8 @@ export class ShadowFlowStarknetClient {
 
     const response = await fetch(`${this.executionApiUrl}/proof/verify-and-store`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ proofHash, finalStateHash }),
+      headers: this.getExecutionHeaders(),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -209,7 +230,7 @@ export class ShadowFlowStarknetClient {
 
     const response = await fetch(
       `${this.executionApiUrl}/nullifier/spent?nullifier=${encodeURIComponent(nullifier)}`,
-      { method: "GET", headers: { "Content-Type": "application/json" } },
+      { method: "GET", headers: this.getExecutionHeaders() },
     );
 
     if (!response.ok) {
@@ -231,7 +252,7 @@ export class ShadowFlowStarknetClient {
 
     const response = await fetch(`${this.executionApiUrl}/chain/state`, {
       method: "GET",
-      headers: { "Content-Type": "application/json" },
+      headers: this.getExecutionHeaders(),
     });
 
     if (!response.ok) {

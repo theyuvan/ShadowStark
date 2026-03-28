@@ -10,12 +10,13 @@ const hexToBigInt = (value: string): bigint => {
 
 /**
  * Proof Aggregator: Combines multiple zero-knowledge proofs into a single aggregated proof.
- * Uses recursive proof composition to reduce on-chain verification cost.
+ * Local mode uses deterministic commitment hashing for batching metadata.
+ * For true recursive proofs, call aggregateRecursively() with a recursive prover backend.
  * 
  * Design:
  * - Individual proofs each verify a single strategy execution
- * - Aggregator combines N proofs into 1 STARK proof that verifies all N
- * - Reduces on-chain gas/constraint cost from O(N) to O(log N)
+ * - Local aggregate() produces a deterministic batch hash for integrity
+ * - aggregateRecursively() delegates to a backend recursive prover service
  * 
  * PRIVATE: Proof content stays in witness context; only aggregate hash transmitted.
  */
@@ -35,8 +36,7 @@ export class ProofAggregator {
 
   /**
    * Aggregate all pending proofs into a single proof.
-   * In production: Calls Cairo recursive aggregation circuit.
-   * For now: Combines proofs using hash tree.
+    * Combines verified proof commitments using a deterministic Poseidon hash tree.
    */
   aggregate(): AggregatedProof {
     if (this.proofs.length === 0) {
@@ -65,12 +65,48 @@ export class ProofAggregator {
       individualCommitments: commitments,
       finalStateHashes,
       proofCount: this.proofs.length,
-      verified: true, // After Cairo circuit execution
+      verified: true,
       totalConstraintCount: totalConstraints,
     };
 
     this.aggregatedProofs.push(aggregatedProof);
     this.proofs = []; // Clear pending proofs
+
+    return aggregatedProof;
+  }
+
+  /**
+   * Build a true recursive aggregate proof via an external prover backend.
+   */
+  async aggregateRecursively(): Promise<AggregatedProof> {
+    if (this.proofs.length === 0) {
+      throw new Error("No proofs to aggregate");
+    }
+
+    const endpoint = process.env.NEXT_PUBLIC_RECURSIVE_AGGREGATOR_API_URL;
+    if (!endpoint) {
+      throw new Error(
+        "NEXT_PUBLIC_RECURSIVE_AGGREGATOR_API_URL is not configured for recursive aggregation.",
+      );
+    }
+
+    const response = await fetch(`${endpoint.replace(/\/$/, "")}/recursive/aggregate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ proofs: this.proofs }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Recursive aggregation failed: ${response.status}`);
+    }
+
+    const aggregatedProof = (await response.json()) as AggregatedProof;
+    if (!verifyAggregatedProof(aggregatedProof)) {
+      throw new Error("Recursive aggregate payload failed deterministic integrity checks.");
+    }
+
+    this.aggregatedProofs.push(aggregatedProof);
+    this.proofs = [];
 
     return aggregatedProof;
   }
@@ -125,8 +161,7 @@ export class ProofAggregator {
 
 /**
  * Verify an aggregated proof.
- * In production: Calls Cairo recursive verification circuit.
- * For now: Checks that all individual commitments are present.
+ * Performs payload integrity checks and deterministic hash recomputation.
  */
 export function verifyAggregatedProof(proof: AggregatedProof): boolean {
   try {
@@ -146,8 +181,13 @@ export function verifyAggregatedProof(proof: AggregatedProof): boolean {
       return false;
     }
 
-    // TODO: Call Garaga to verify aggregated STARK proof
-    return true;
+    let recomputed: bigint = 0n;
+    for (const commitment of proof.individualCommitments) {
+      recomputed = hash2(recomputed, hexToBigInt(commitment));
+    }
+
+    const expectedHash = `0x${recomputed.toString(16)}`.toLowerCase();
+    return expectedHash === proof.aggregatedProofHash.toLowerCase();
   } catch (error) {
     console.error("Aggregated proof verification error:", error);
     return false;

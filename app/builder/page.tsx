@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { ZKFlowBuilder } from "@/components/builder/ZKFlowBuilder";
 
 export default function BuilderPage() {
@@ -21,10 +22,12 @@ export default function BuilderPage() {
         </div>
       </section>
 
-      <ZKFlowBuilder />
+      <Suspense fallback={<div className="rounded-xl border border-border bg-surface p-4 text-sm text-muted">Loading builder...</div>}>
+        <ZKFlowBuilder />
+      </Suspense>
 
       <section className="rounded-xl border border-border bg-surface px-4 py-3 text-xs text-muted">
-        Compile requires wallet confirmation, generates a proof artifact in the local proofs folder, and then runs verification.
+        Compile runs only for deposit-confirmed privOTC intents, requires wallet confirmation, writes proof artifacts to the local proofs folder, and then verifies.
       </section>
     </main>
   );

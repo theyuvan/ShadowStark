@@ -8,6 +8,7 @@
 import { ShadowFlowStarknetClient, ProofVerificationResult } from "@/lib/starknetClient";
 import { generateZkProof } from "@/lib/zkProver";
 import type { CircuitPublicInputs, ZKProof } from "@/types";
+import { hash } from "starknet";
 
 const client = new ShadowFlowStarknetClient();
 
@@ -178,15 +179,12 @@ export async function batchVerifyProofs(proofs: ZKProof[]): Promise<ProofVerific
  * Hash public inputs for verification (felt252 format)
  */
 function hashPublicInputs(inputs: CircuitPublicInputs): string {
-  // In production, this should use a proper hash function
-  // For now, returning a placeholder - you may want to use:
-  // - poseidon() from starknet library
-  // - keccak256() from noble/hashes
-  const combined = JSON.stringify(inputs);
-  const digest = combined.split("").reduce((hashAccumulator, char) => {
-    return (hashAccumulator * 31n + BigInt(char.charCodeAt(0))) % 0xffffffffffffffffn;
-  }, 0n);
-  return `0x${digest.toString(16).padStart(64, "0")}`;
+  return hash.computePoseidonHashOnElements([
+    inputs.commitment,
+    inputs.finalStateHash,
+    inputs.nullifier,
+    inputs.merkleRoot,
+  ]);
 }
 
 // ============================================
@@ -236,7 +234,7 @@ function hashPublicInputs(inputs: CircuitPublicInputs): string {
  * [ ] 4. Monitor nullifier status to prevent replays
  * [ ] 5. Add error handling and user-facing messages
  * [ ] 6. Create a custom React hook (useProofVerification) for components
- * [ ] 7. Implement real public inputs hashing (not placeholder)
+ * [ ] 7. Validate public-input hashing parity with backend verifier
  * [ ] 8. Add loading states and transaction progress tracking
  * [ ] 9. Monitor ProofChecked events from GaragaVerifier contract
  * [ ] 10. Test with actual wallet connection to Starknet Sepolia

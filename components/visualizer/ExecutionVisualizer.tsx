@@ -2,7 +2,8 @@
 
 import { motion } from "framer-motion";
 import { Zap, Target, Cpu, Lock, Landmark, CheckCircle2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { ZKProof } from "@/types";
 
 interface PipelineStage {
   id: number;
@@ -14,65 +15,115 @@ interface PipelineStage {
   status: "pending" | "active" | "complete";
 }
 
-const stages: PipelineStage[] = [
-  {
-    id: 1,
-    title: "Strategy Input",
-    description: "Your graph is submitted",
-    icon: <Target className="h-8 w-8" />,
-    color: "bg-cyan-500/20",
-    textColor: "text-cyan-400",
-    status: "complete",
-  },
-  {
-    id: 2,
-    title: "Commitment",
-    description: "Hash & serialize",
-    icon: <Cpu className="h-8 w-8" />,
-    color: "bg-indigo-500/20",
-    textColor: "text-indigo-400",
-    status: "complete",
-  },
-  {
-    id: 3,
-    title: "Execution",
-    description: "Steps run through",
-    icon: <Zap className="h-8 w-8" />,
-    color: "bg-amber-500/20",
-    textColor: "text-amber-400",
-    status: "active",
-  },
-  {
-    id: 4,
-    title: "ZK Proof",
-    description: "Generate witness",
-    icon: <Lock className="h-8 w-8" />,
-    color: "bg-violet-500/20",
-    textColor: "text-violet-400",
-    status: "pending",
-  },
-  {
-    id: 5,
-    title: "Starknet",
-    description: "Submit on-chain",
-    icon: <Landmark className="h-8 w-8" />,
-    color: "bg-blue-500/20",
-    textColor: "text-blue-400",
-    status: "pending",
-  },
-  {
-    id: 6,
-    title: "Final State",
-    description: "Proof verified",
-    icon: <CheckCircle2 className="h-8 w-8" />,
-    color: "bg-emerald-500/20",
-    textColor: "text-emerald-400",
-    status: "pending",
-  },
-];
+const buildStages = (proof: ZKProof | null): PipelineStage[] => {
+  const hasProof = Boolean(proof);
+  const isVerified = Boolean(proof?.verified);
 
-export function ExecutionVisualizer() {
-  const [selectedStage, setSelectedStage] = useState<PipelineStage | null>(stages[2]);
+  return [
+    {
+      id: 1,
+      title: "Strategy Input",
+      description: hasProof ? "Strategy loaded from current proof" : "Waiting for strategy compile",
+      icon: <Target className="h-8 w-8" />,
+      color: "bg-cyan-500/20",
+      textColor: "text-cyan-400",
+      status: hasProof ? "complete" : "active",
+    },
+    {
+      id: 2,
+      title: "Commitment",
+      description: hasProof ? "Commitment generated" : "Pending commitment",
+      icon: <Cpu className="h-8 w-8" />,
+      color: "bg-indigo-500/20",
+      textColor: "text-indigo-400",
+      status: hasProof ? "complete" : "pending",
+    },
+    {
+      id: 3,
+      title: "Execution",
+      description: hasProof ? "Execution trace captured" : "Execution not started",
+      icon: <Zap className="h-8 w-8" />,
+      color: "bg-amber-500/20",
+      textColor: "text-amber-400",
+      status: hasProof ? "complete" : "pending",
+    },
+    {
+      id: 4,
+      title: "ZK Proof",
+      description: hasProof ? "Witness + proof generated" : "Generating witness",
+      icon: <Lock className="h-8 w-8" />,
+      color: "bg-violet-500/20",
+      textColor: "text-violet-400",
+      status: hasProof ? "complete" : "pending",
+    },
+    {
+      id: 5,
+      title: "Starknet",
+      description: isVerified ? "Verified by on-chain call" : hasProof ? "Verification submitted" : "Awaiting submission",
+      icon: <Landmark className="h-8 w-8" />,
+      color: "bg-blue-500/20",
+      textColor: "text-blue-400",
+      status: isVerified ? "complete" : hasProof ? "active" : "pending",
+    },
+    {
+      id: 6,
+      title: "Final State",
+      description: isVerified ? "Proof verified" : "Pending on-chain verification",
+      icon: <CheckCircle2 className="h-8 w-8" />,
+      color: "bg-emerald-500/20",
+      textColor: "text-emerald-400",
+      status: isVerified ? "complete" : "pending",
+    },
+  ];
+};
+
+export function ExecutionVisualizer({ proof }: { proof: ZKProof | null }) {
+  const stages = useMemo(() => buildStages(proof), [proof]);
+  const [selectedStage, setSelectedStage] = useState<PipelineStage | null>(stages[0]);
+  const [isRunning, setIsRunning] = useState(false);
+  const [runMessage, setRunMessage] = useState<string | null>(null);
+  const derivedSteps = proof ? Math.max(1, Math.floor((proof.constraintCount - 12) / 3)) : 0;
+  const verifierAddress = process.env.NEXT_PUBLIC_GARAGA_VERIFIER_ADDRESS;
+
+  useEffect(() => {
+    setSelectedStage((previous) => {
+      if (!previous) {
+        return stages[0] ?? null;
+      }
+
+      return stages.find((stage) => stage.id === previous.id) ?? stages[0] ?? null;
+    });
+  }, [stages]);
+
+  const runSimulation = () => {
+    if (!proof) {
+      setRunMessage("No proof loaded. Compile in Builder first, then return here.");
+      return;
+    }
+
+    setRunMessage(null);
+    setIsRunning(true);
+
+    const completeIds = stages.filter((stage) => stage.status !== "pending").map((stage) => stage.id);
+    if (!completeIds.length) {
+      setIsRunning(false);
+      return;
+    }
+
+    let pointer = 0;
+    setSelectedStage(stages.find((stage) => stage.id === completeIds[pointer]) ?? stages[0] ?? null);
+
+    const timer = setInterval(() => {
+      pointer += 1;
+      if (pointer >= completeIds.length) {
+        clearInterval(timer);
+        setIsRunning(false);
+        return;
+      }
+
+      setSelectedStage(stages.find((stage) => stage.id === completeIds[pointer]) ?? stages[0] ?? null);
+    }, 450);
+  };
 
   return (
     <main className="space-y-6 p-4">
@@ -83,10 +134,15 @@ export function ExecutionVisualizer() {
             <p className="text-[11px] uppercase tracking-[0.22em] text-muted">Private Execution Path</p>
             <h1 className="font-heading text-2xl font-semibold text-foreground">Simulation</h1>
           </div>
-          <button className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white hover:bg-primary/90 transition-colors">
-            Run Simulation
+          <button
+            onClick={runSimulation}
+            disabled={isRunning}
+            className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-60"
+          >
+            {isRunning ? "Running..." : "Run Simulation"}
           </button>
         </div>
+        {runMessage ? <p className="mt-2 text-xs text-amber-400">{runMessage}</p> : null}
       </section>
 
       {/* Pipeline Visualization */}
@@ -185,7 +241,7 @@ export function ExecutionVisualizer() {
           {selectedStage.id === 1 && (
             <div className="space-y-2 text-xs text-muted">
               <p>• Graph nodes submitted to execution engine</p>
-              <p>• 4 nodes detected: Condition, Split, Execute, Constraint</p>
+              <p>• Constraint-derived steps: {derivedSteps || "n/a"}</p>
               <p>• Strategy salt: shadowflow</p>
             </div>
           )}
@@ -193,7 +249,7 @@ export function ExecutionVisualizer() {
           {selectedStage.id === 2 && (
             <div className="space-y-2 text-xs text-muted">
               <p>• Using Poseidon hash with private salt</p>
-              <p>• Commitment: <code className="font-code text-cyan-400">0x3f2a5bc8...</code></p>
+              <p>• Commitment: <code className="font-code text-cyan-400">{proof?.commitment?.slice(0, 14) ?? "n/a"}...</code></p>
               <p>• Hash verified: ✓</p>
             </div>
           )}
@@ -201,10 +257,10 @@ export function ExecutionVisualizer() {
           {selectedStage.id === 3 && (
             <div className="space-y-2 text-xs text-muted">
               <p>⚙ Executing strategy steps...</p>
-              <p>• Current step: 2 of 4</p>
-              <p>• Constraint checks: ALL PASS</p>
+              <p>• Current step: {proof ? derivedSteps : 0} of {proof ? derivedSteps : 0}</p>
+              <p>• Constraint checks: {proof ? "CAPTURED" : "PENDING"}</p>
               <div className="mt-2 h-1 w-full rounded-full bg-background">
-                <div className="h-full w-1/2 rounded-full bg-amber-400" />
+                <div className={`h-full rounded-full bg-amber-400 ${proof ? "w-full" : "w-1/3"}`} />
               </div>
             </div>
           )}
@@ -212,7 +268,8 @@ export function ExecutionVisualizer() {
           {selectedStage.id === 4 && (
             <div className="space-y-2 text-xs text-muted">
               <p>🔒 Generating zero-knowledge proof...</p>
-              <p>• Constraints: 3 range proofs, 1 partition</p>
+              <p>• Constraints: {proof?.constraintCount ?? "n/a"}</p>
+              <p>• Proof size: {proof?.proofSize ?? "n/a"} bytes</p>
               <p>• Private witness: sealed from verifier</p>
             </div>
           )}
@@ -221,13 +278,13 @@ export function ExecutionVisualizer() {
             <div className="space-y-2 text-xs text-muted">
               <p>📡 On-chain submission to Starknet...</p>
               <p>• Target network: Starknet Testnet</p>
-              <p>• Contract: GaragaVerifier</p>
+              <p>• Contract: {verifierAddress ? `${verifierAddress.slice(0, 12)}...` : "GaragaVerifier"}</p>
             </div>
           )}
 
           {selectedStage.id === 6 && (
             <div className="space-y-2 text-xs text-emerald-400">
-              <p>✓ Proof verified successfully</p>
+              <p>{proof?.verified ? "✓ Proof verified successfully" : "• Verification pending"}</p>
               <p>• Nullifier: locked on-chain</p>
               <p>• Execution logs: sealed</p>
             </div>

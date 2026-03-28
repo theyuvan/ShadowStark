@@ -26,9 +26,11 @@
 
 ### GaragaVerifier.cairo
 - **Purpose:** Proof verification contract for Garaga ZK proofs
-- **Storage:** `allowed_proofs` map (proof_hash → bool)
+- **Storage:** `admin`, `allowed_proofs` map (proof_hash → bool), `allowed_pairs` map ((proof_hash, public_inputs_hash) → bool)
 - **Functions:**
-  - `set_allowed_proof(proof_hash, is_allowed)` - Register approved proofs
+   - `set_admin(new_admin)` - Rotate trusted backend/admin signer
+   - `set_allowed_proof(proof_hash, is_allowed)` - Backward-compatible proof registration
+   - `register_verified_proof(proof_hash, public_inputs_hash, is_allowed)` - Register approved proof/public-input pair
   - `verify(proof_hash, public_inputs_hash)` - Verify proof validity
 - **Events:** `ProofChecked` - Emitted on verification
 

@@ -1,127 +1,54 @@
 "use client";
-import React, { useMemo } from "react";
 
+import React, { useMemo } from "react";
 import { motion } from "framer-motion";
 import { Trees } from "lucide-react";
+import { poseidonHash } from "@scure/starknet";
+import type { ProofMerklePath } from "@/types";
+
 interface MerkleTreeVisualizerProps {
   root?: bigint;
   leafCount?: number;
   depth?: number;
   highlightedLeaf?: number;
+  merklePath?: ProofMerklePath;
 }
 
-/**
- * MerkleTreeVisualizer: SVG visualization of the Merkle tree structure.
- * Shows tree depth levels, animated leaf insertion, and highlights the Merkle path.
- * PRIVATE data (pathElements, pathIndices) remain hidden; only structure shown.
- */
+const toBigInt = (hex: string): bigint => BigInt(hex.startsWith("0x") ? hex : `0x${hex}`);
+const shortHex = (hex: string) => `${hex.slice(0, 14)}...${hex.slice(-8)}`;
+
 export function MerkleTreeVisualizer({
-  root = 123456789n,
-  leafCount = 4,
-  depth = 3,
+  root = 0n,
+  leafCount = 0,
+  depth = 0,
   highlightedLeaf,
+  merklePath,
 }: MerkleTreeVisualizerProps) {
-  // Limit rendered tree depth to prevent UI overload
-  const renderDepth = Math.min(depth, 4);
-  const leafsPerLevel = Math.pow(2, renderDepth);
-
-  // SVG dimensions
-  const nodeRadius = 16;
-  const levelHeight = 80;
-  const horizontalSpacing = 40;
-
-  // Calculate SVG dimensions
-  const svgWidth = leafsPerLevel * horizontalSpacing + 100;
-  const svgHeight = (renderDepth + 1) * levelHeight + 60;
-
-  // Generate tree nodes for visualization (not cryptographic, just structure)
-  const nodes = useMemo(() => {
-    const treeNodes: {
-      x: number;
-      y: number;
-      level: number;
-      index: number;
-      hash: string;
-      isLeaf: boolean;
-      active: boolean;
-    }[] = [];
-
-    // Leaves (level 0)
-    for (let i = 0; i < Math.min(leafCount, leafsPerLevel); i++) {
-      const x = 50 + i * horizontalSpacing;
-      const y = svgHeight - 40;
-      treeNodes.push({
-        x,
-        y,
-        level: 0,
-        index: i,
-        hash: `L${i}`,
-        isLeaf: true,
-        active: i === highlightedLeaf,
-      });
+  const pathSteps = useMemo(() => {
+    if (!merklePath) {
+      return [] as Array<{ level: number; side: "left" | "right"; sibling: string; parent: string }>;
     }
 
-    // Parent levels
-    for (let level = 1; level <= renderDepth; level++) {
-      const nodesAtLevel = Math.pow(2, renderDepth - level);
-      for (let i = 0; i < nodesAtLevel; i++) {
-        const x = 50 + (i * leafsPerLevel) / nodesAtLevel * horizontalSpacing + horizontalSpacing / 2;
-        const y = svgHeight - 40 - level * levelHeight;
-        treeNodes.push({
-          x,
-          y,
-          level,
-          index: i,
-          hash: `H${level}${i}`,
-          isLeaf: false,
-          active: false,
-        });
-      }
-    }
+    let current = toBigInt(merklePath.leaf);
+    return merklePath.pathElements.map((siblingHex, level) => {
+      const sibling = toBigInt(siblingHex);
+      const isRight = merklePath.pathIndices[level] === 1;
+      const parent = isRight ? poseidonHash(sibling, current) : poseidonHash(current, sibling);
+      const parentHex = `0x${parent.toString(16)}`;
+      current = parent;
 
-    return treeNodes;
-  }, [leafCount, highlightedLeaf, leafsPerLevel, svgHeight, renderDepth]);
+      return {
+        level,
+        side: isRight ? "right" : "left",
+        sibling: siblingHex,
+        parent: parentHex,
+      };
+    });
+  }, [merklePath]);
 
-  // Generate edges between parent and children
-  const edges = useMemo(() => {
-    const edgesArray: { x1: number; y1: number; x2: number; y2: number; active: boolean }[] = [];
-
-    for (const node of nodes) {
-      if (node.level === 0) continue;
-
-      const childIndex1 = node.index * 2;
-      const childIndex2 = node.index * 2 + 1;
-
-      const leftChild = nodes.find(
-        (n) => n.level === node.level - 1 && n.index === childIndex1
-      );
-      const rightChild = nodes.find(
-        (n) => n.level === node.level - 1 && n.index === childIndex2
-      );
-
-      if (leftChild) {
-        edgesArray.push({
-          x1: leftChild.x,
-          y1: leftChild.y,
-          x2: node.x,
-          y2: node.y,
-          active: node.active || leftChild.active,
-        });
-      }
-
-      if (rightChild) {
-        edgesArray.push({
-          x1: rightChild.x,
-          y1: rightChild.y,
-          x2: node.x,
-          y2: node.y,
-          active: node.active || rightChild.active,
-        });
-      }
-    }
-
-    return edgesArray;
-  }, [nodes]);
+  const computedRoot = pathSteps.length ? pathSteps[pathSteps.length - 1].parent : null;
+  const displayedRootHex = merklePath?.root ?? `0x${root.toString(16)}`;
+  const rootMatches = computedRoot ? computedRoot.toLowerCase() === displayedRootHex.toLowerCase() : false;
 
   return (
     <motion.div
@@ -129,86 +56,54 @@ export function MerkleTreeVisualizer({
       animate={{ opacity: 1, y: 0 }}
       className="rounded-xl border border-border bg-surface p-5"
     >
-      {/* Header */}
       <div className="mb-4 flex items-center gap-3">
-        <div className="h-10 w-10 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/20">
           <Trees className="h-6 w-6 text-indigo-400" />
         </div>
         <div>
-          <h3 className="font-heading text-lg font-semibold">Merkle Tree</h3>
-          <p className="text-xs text-muted">{leafCount} leaves, {renderDepth} levels</p>
+          <h3 className="font-heading text-lg font-semibold">Merkle Path (Real)</h3>
+          <p className="text-xs text-muted">{leafCount} leaves, depth {depth}</p>
         </div>
       </div>
 
-      {/* SVG */}
-      <div className="flex justify-center mb-4">
-        <svg
-          width={svgWidth}
-          height={svgHeight}
-          className="bg-background/50 border border-border rounded-lg"
-        >
-        {/* Draw edges */}
-        {edges.map((edge, idx) => (
-          <motion.line
-            key={`edge-${idx}`}
-            x1={edge.x1}
-            y1={edge.y1}
-            x2={edge.x2}
-            y2={edge.y2}
-              stroke={edge.active ? "#10B981" : "#475569"}
-            strokeWidth={edge.active ? 2 : 1}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: idx * 0.01 }}
-          />
-        ))}
-
-        {/* Draw nodes */}
-        {nodes.map((node, idx) => (
-          <motion.g key={`node-${idx}`} initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: idx * 0.02 }}>
-            {/* Node circle */}
-            <circle
-              cx={node.x}
-              cy={node.y}
-              r={nodeRadius}
-                fill={node.active ? "#10B981" : node.isLeaf ? "#1E293B" : "#264653"}
-                stroke={node.active ? "#FFFF00" : node.isLeaf ? "#10B981" : "#94A3B8"}
-              strokeWidth={node.active ? 2 : 1}
-            />
-
-            {/* Node label */}
-            <text
-              x={node.x}
-              y={node.y + 5}
-              textAnchor="middle"
-              fontSize="10"
-                fill={node.active ? "#000" : node.isLeaf ? "#10B981" : "#CBD5E1"}
-              fontWeight="bold"
-            >
-              {node.isLeaf ? "L" : "H"}
-            </text>
-          </motion.g>
-        ))}
-
-        {/* Legend */}
-          <text x={10} y={20} fontSize="11" fill="#94A3B8">
-            ■ Leaf ■ Hash ▓ Active
-        </text>
-      </svg>
-      </div>
-
-      {/* Info */}
-      <div className="space-y-2 border-t border-border pt-3">
-        <div className="flex justify-between text-xs text-muted">
-          <span>Root:</span>
-          <code className="text-cyan-400 font-code">0x{root.toString(16).slice(0, 8)}...</code>
+      {!merklePath ? (
+        <div className="rounded-lg border border-border bg-background/50 p-3 text-xs text-muted">
+          No Merkle proof path available yet. Compile and generate a proof to render full cryptographic path.
         </div>
-        <p className="text-xs text-muted">
-          {highlightedLeaf !== undefined
-            ? `Merkle path from leaf ${highlightedLeaf} to root (PRIVATE — proof data hidden)`
-            : "Tree structure (individual hash values hidden for privacy)"}
-        </p>
-      </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="rounded-lg border border-border bg-background/50 p-3 text-xs">
+            <p className="text-muted">Leaf</p>
+            <code className="font-code text-cyan-400">{shortHex(merklePath.leaf)}</code>
+            {highlightedLeaf !== undefined ? (
+              <p className="mt-1 text-muted">Leaf index: {highlightedLeaf}</p>
+            ) : null}
+          </div>
+
+          <div className="max-h-60 space-y-2 overflow-y-auto rounded-lg border border-border bg-background/40 p-3">
+            {pathSteps.map((step) => (
+              <div key={`merkle-step-${step.level}`} className="rounded border border-border/70 bg-base p-2 text-xs">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-muted">Level {step.level}</span>
+                  <span className="rounded bg-primary/20 px-2 py-0.5 text-[10px] text-primary">
+                    current is {step.side}
+                  </span>
+                </div>
+                <p className="text-muted">Sibling: <code className="font-code text-cyan-400">{shortHex(step.sibling)}</code></p>
+                <p className="text-muted">Parent: <code className="font-code text-emerald-400">{shortHex(step.parent)}</code></p>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-lg border border-border bg-background/50 p-3 text-xs">
+            <p className="text-muted">Root</p>
+            <code className="font-code text-cyan-400">{shortHex(displayedRootHex)}</code>
+            <p className={`mt-2 ${rootMatches ? "text-emerald-400" : "text-amber-400"}`}>
+              {rootMatches ? "✓ Computed path root matches proof root" : "⧖ Root check pending / mismatch"}
+            </p>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

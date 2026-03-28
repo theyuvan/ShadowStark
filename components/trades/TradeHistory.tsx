@@ -55,9 +55,9 @@ export function TradeHistory({ trades, onViewProof }: TradeHistoryProps) {
               <td className="px-4 py-2">
                 <span
                   className={
-                    trade.status === "complete"
+                    trade.status === "settled"
                       ? "text-emerald-400"
-                      : trade.status === "active"
+                      : trade.status === "open"
                         ? "text-cyan-400"
                         : "text-amber-400"
                   }

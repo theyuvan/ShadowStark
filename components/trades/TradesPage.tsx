@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useWalletStore } from "@/store/walletStore";
 import { otcClient } from "@/lib/otcClient";
 
@@ -11,9 +12,85 @@ import { TradeHistory } from "@/components/trades/TradeHistory";
 import type { ExecutionLog, TradeRecord } from "@/types";
 import type { StrategySummary } from "@/lib/otcClient";
 
+const intentTypedData = (payload: {
+  walletAddress: string;
+  direction: "buy" | "sell";
+  templateId: "simple" | "split" | "guarded";
+  priceThreshold: number;
+  amount: number;
+  splitCount: number;
+  selectedPath: string;
+  depositAmount: number;
+}) => ({
+  types: {
+    StarkNetDomain: [
+      { name: "name", type: "shortstring" },
+      { name: "version", type: "shortstring" },
+      { name: "chainId", type: "shortstring" },
+    ],
+    OTCIntent: [
+      { name: "wallet", type: "felt" },
+      { name: "direction", type: "shortstring" },
+      { name: "template", type: "shortstring" },
+      { name: "priceThreshold", type: "felt" },
+      { name: "amount", type: "felt" },
+      { name: "splitCount", type: "felt" },
+      { name: "selectedPath", type: "shortstring" },
+      { name: "depositAmount", type: "felt" },
+    ],
+  },
+  primaryType: "OTCIntent",
+  domain: {
+    name: "ShadowFlow",
+    version: "1",
+    chainId: "SN_SEPOLIA",
+  },
+  message: {
+    wallet: payload.walletAddress,
+    direction: payload.direction,
+    template: payload.templateId,
+    priceThreshold: `${payload.priceThreshold}`,
+    amount: `${payload.amount}`,
+    splitCount: `${payload.splitCount}`,
+    selectedPath: payload.selectedPath,
+    depositAmount: `${payload.depositAmount}`,
+  },
+});
+
+async function signIntentPayload(payload: {
+  walletAddress: string;
+  direction: "buy" | "sell";
+  templateId: "simple" | "split" | "guarded";
+  priceThreshold: number;
+  amount: number;
+  splitCount: number;
+  selectedPath: string;
+  depositAmount: number;
+}) {
+  const signer = (
+    window as Window & {
+      starknet?: { account?: { signMessage?: (typedData: Record<string, unknown>) => Promise<unknown> } };
+    }
+  ).starknet?.account?.signMessage;
+  if (!signer) {
+    throw new Error("Wallet signature is required to submit private OTC intents.");
+  }
+
+  const nonce = `${Date.now()}`;
+  const signedAt = Date.now();
+  const signature = await signer(intentTypedData(payload));
+
+  return {
+    nonce,
+    signedAt,
+    signature: JSON.stringify(signature),
+  };
+}
+
 export function TradesPage() {
-  const [activeTab, setActiveTab] = useState<"active" | "completed" | "pending">("active");
-  const { connected, address } = useWalletStore();
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"open" | "matched" | "settled">("open");
+  const { connected, address, btcBalance, strkBalance } = useWalletStore();
   const [strategies, setStrategies] = useState<StrategySummary[]>([]);
   const [logs, setLogs] = useState<ExecutionLog[]>([]);
   const [trades, setTrades] = useState<TradeRecord[]>([]);
@@ -66,23 +143,47 @@ export function TradesPage() {
   const filteredStrategies = useMemo(
     () =>
       strategies.filter((s) => {
-        if (activeTab === "active") return s.status === "active";
-        if (activeTab === "pending") return s.status === "pending";
-        return s.status === "complete";
+        if (activeTab === "open") return s.status === "open";
+        if (activeTab === "matched") return s.status === "matched";
+        return s.status === "settled";
       }),
     [activeTab, strategies],
   );
 
   const handleSubmitIntent = useCallback(
-    async (payload: { direction: "buy" | "sell"; templateId: "simple" | "split" | "guarded"; priceThreshold: number; amount: number; splitCount: number }) => {
+    async (payload: {
+      direction: "buy" | "sell";
+      templateId: "simple" | "split" | "guarded";
+      priceThreshold: number;
+      amount: number;
+      splitCount: number;
+      depositConfirmed: boolean;
+      depositAmount: number;
+      selectedPath: string;
+    }) => {
       if (!address) {
         throw new Error("Wallet not connected.");
+      }
+
+      if (!payload.depositConfirmed || payload.depositAmount <= 0) {
+        throw new Error("Deposit must be confirmed before submitting intent.");
       }
 
       setSubmitting(true);
       setErrorMessage(null);
       try {
-        await otcClient.submitIntent({ ...payload, walletAddress: address });
+        const walletAuth = await signIntentPayload({
+          walletAddress: address,
+          direction: payload.direction,
+          templateId: payload.templateId,
+          priceThreshold: payload.priceThreshold,
+          amount: payload.amount,
+          splitCount: payload.splitCount,
+          selectedPath: payload.selectedPath,
+          depositAmount: payload.depositAmount,
+        });
+
+        await otcClient.submitIntent({ ...payload, walletAddress: address, walletAuth });
         await reloadData();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Intent submission failed.";
@@ -103,6 +204,13 @@ export function TradesPage() {
     window.open(`${baseUrl}/${proofHash}`, "_blank", "noopener,noreferrer");
   }, []);
 
+  const handleInspectOrder = useCallback(
+    (commitment: string) => {
+      router.push(`/verify?hash=${encodeURIComponent(commitment)}`);
+    },
+    [router],
+  );
+
   return (
     <main className="space-y-4 p-4">
       {/* Header */}
@@ -114,10 +222,13 @@ export function TradesPage() {
           </div>
           <div className="flex items-center gap-2 text-[11px]">
             <span className="rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-primary">
-              {strategies.filter((s) => s.status === "active").length} ACTIVE
+              {strategies.filter((s) => s.status === "open").length} OPEN
             </span>
             <span className="rounded-md border border-amber/30 bg-amber/10 px-2 py-1 text-amber-400">
-              {trades.filter((t) => t.status === "complete").length} COMPLETED
+              {trades.filter((t) => t.status === "matched").length} MATCHED
+            </span>
+            <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-400">
+              {trades.filter((t) => t.status === "settled").length} SETTLED
             </span>
           </div>
         </div>
@@ -140,9 +251,9 @@ export function TradesPage() {
           {/* Tabs */}
           <div className="flex gap-2 border-b border-border/50">
             {[
-              { id: "active" as const, label: "Active Strategies" },
-              { id: "pending" as const, label: "Pending Proof" },
-              { id: "completed" as const, label: "Completed" },
+              { id: "open" as const, label: "Open Orders" },
+              { id: "matched" as const, label: "Matched" },
+              { id: "settled" as const, label: "Settled" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -168,6 +279,7 @@ export function TradesPage() {
                   key={strategy.id}
                   strategy={strategy}
                   onViewProof={handleOpenProof}
+                  onInspect={handleInspectOrder}
                 />
               ))
             ) : (
@@ -208,7 +320,13 @@ export function TradesPage() {
           </div>
 
           {/* New Trade Panel */}
-          <NewTradePanel walletAddress={address} submitting={submitting} onSubmitIntent={handleSubmitIntent} />
+          <NewTradePanel
+            walletAddress={address}
+            btcBalance={btcBalance}
+            strkBalance={strkBalance}
+            submitting={submitting}
+            onSubmitIntent={handleSubmitIntent}
+          />
         </div>
       </div>
 

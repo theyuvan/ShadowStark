@@ -1,0 +1,19 @@
+{
+  "proofs": {
+    "0xabc123": {
+      "proofHash": "0xabc123",
+      "publicInputsHash": "0xdef456",
+      "finalStateHash": "0x111222",
+      "nullifier": "0x999aaa",
+      "registeredAt": "2026-03-27T14:55:12.046Z"
+    },
+    "0xabc124": {
+      "proofHash": "0xabc124",
+      "publicInputsHash": "0xdef457",
+      "finalStateHash": "0x111223",
+      "nullifier": "0x999aab",
+      "registeredAt": "2026-03-27T14:55:56.327Z",
+      "spentAt": "2026-03-27T14:56:31.387Z"
+    }
+  }
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeftRight, BarChart3, BookOpen, Hexagon, Play, Workflow } from "lucide-react";
+import { ArrowLeftRight, BarChart3, BookOpen, Hexagon, Play, ShieldCheck, Workflow } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { ConnectWallet } from "@/components/wallet/ConnectWallet";
 import { TEEStatus } from "@/components/tee/TEEStatus";
@@ -12,6 +12,7 @@ const links = [
   { href: "/simulate", label: "Simulate", icon: Play },
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/trades", label: "My Trades", icon: ArrowLeftRight },
+  { href: "/verify", label: "Proof Checker", icon: ShieldCheck },
   { href: "/docs", label: "Docs", icon: BookOpen },
 ];
 
