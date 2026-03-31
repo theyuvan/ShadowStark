@@ -8,7 +8,7 @@
  */
 
 import { OtcMatchingService } from './otcMatchingService';
-import { OtcStateStore } from './otcStateStore';
+import { confirmEscrowDeposit, settleMatchWithCrossChain } from './otcStateStore';
 import { RpcProvider, Account, Signer } from 'starknet';
 import { runInTEE } from '@/lib/tee/teeClient';
 
@@ -171,91 +171,113 @@ export class OtcEscrowService {
 
   /**
    * REAL atomic swap execution with TEE attestation
-   * Wraps the swap in TEE for secure execution
+   * Called after BOTH parties have funded escrow
+   * Flow: PartyA funds → PartyB funds → Both approved → Execute swap in TEE
    */
   public async executeAtomicSwap(
     intentId: string,
     matchId: string,
     match: any
-  ): Promise<{ transactionHash: string; escrowAddress: string; steps: any[] }> {
-    // Check if TEE is enabled
-    const teeEnabled = process.env.NEXT_PUBLIC_ENABLE_TEE === 'true';
+  ): Promise<{ transactionHash: string; escrowAddress: string; steps: any[]; teeAttestation?: any }> {
+    console.log('\n' + '═'.repeat(70));
+    console.log('[OtcEscrow] 🔐 STARTING ATOMIC SWAP EXECUTION (TEE-PROTECTED)');
+    console.log('═'.repeat(70));
     
-    if (!teeEnabled) {
-      console.log('[OtcEscrow] TEE disabled, executing swap directly...');
-      return this.executeAtomicSwapImpl(intentId, matchId, match);
+    // Verify both parties have funded
+    if (match.status !== 'both_approved') {
+      throw new Error(
+        `Cannot execute swap - match status is '${match.status}', expected 'both_approved'. ` +
+        'Both parties must fund escrow first.'
+      );
     }
 
-    // Execute atomic swap within TEE
-    console.log('[OtcEscrow] 🔐 Executing atomic swap within TEE...');
-    const logs: any[] = [];
+    console.log(`[OtcEscrow] ✅ Both parties confirmed funded in escrow`);
+    console.log(`[OtcEscrow] Match ID: ${matchId.slice(0, 20)}...`);
+    console.log(`[OtcEscrow] Intent ID: ${intentId.slice(0, 20)}...`);
+
+    // Check if TEE is enabled
+    const teeEnabled = process.env.NEXT_PUBLIC_ENABLE_TEE === 'true';
+    console.log(`[OtcEscrow] TEE Status: ${teeEnabled ? '🔐 ENABLED' : '⚠️ DISABLED'}`);
     
     try {
-      const { attestation } = await runInTEE(
-        {
-          id: matchId,
-          name: `Atomic Swap: ${intentId.slice(0, 10)}`,
-          type: 'atomic_swap',
-          description: `Securely execute atomic swap between parties`,
-        },
-        () => {
-          // Log execution in TEE
-          logs.push({
-            timestamp: Date.now(),
-            action: 'swap_execution_started',
-            intentId: intentId.slice(0, 10),
-            matchId: matchId.slice(0, 10),
-          });
-          return logs;
+      let teeAttestation: any = null;
+
+      // If TEE enabled, generate attestation
+      if (teeEnabled) {
+        console.log('[OtcEscrow] 🔐 Generating TEE attestation for secure execution...');
+        try {
+          const { attestation } = await runInTEE(
+            {
+              id: matchId,
+              graph: { nodes: [], edges: [] },
+              salt: matchId,
+              createdAt: Date.now(),
+            },
+            () => {
+              return {
+                matchId,
+                intentId,
+                timestamp: Date.now(),
+                action: 'atomic_swap_execution',
+              };
+            }
+          );
+
+          teeAttestation = {
+            matchId,
+            intentId,
+            enclaveType: attestation.enclaveType,
+            measurementHash: attestation.measurementHash,
+            timestamp: attestation.timestamp,
+            valid: attestation.valid,
+          };
+          
+          console.log('[OtcEscrow] ✅ TEE Attestation generated successfully');
+          console.log(`[OtcEscrow]    Enclave: ${attestation.enclaveType}`);
+          console.log(`[OtcEscrow]    Hash: ${attestation.measurementHash.slice(0, 20)}...`);
+        } catch (teeGenError) {
+          console.warn('[OtcEscrow] ⚠️ TEE attestation generation failed, continuing:', teeGenError);
         }
-      );
+      }
 
-      // Store TEE attestation for this match
-      const attestationData = {
-        matchId,
-        intentId,
-        enclaveType: attestation.enclaveType,
-        measurementHash: attestation.measurementHash,
-        timestamp: attestation.timestamp,
-        valid: attestation.valid,
-      };
-      
-      console.log('[OtcEscrow] ✅ TEE Attestation generated:', attestationData);
-
-      // Now execute the actual swap
+      // Execute the actual atomic swap
+      console.log('[OtcEscrow] 🚀 Executing atomic swap on Starknet...');
       const swapResult = await this.executeAtomicSwapImpl(intentId, matchId, match);
       
-      // Attach TEE attestation to result
+      // Return result with TEE attestation if available
       return {
         ...swapResult,
-        teeAttestation: attestationData,
+        teeAttestation,
       };
-    } catch (teeError) {
-      console.error('[OtcEscrow] TEE execution failed:', teeError);
-      // Fall back to direct execution if TEE fails
-      console.log('[OtcEscrow] Falling back to direct execution...');
-      return this.executeAtomicSwapImpl(intentId, matchId, match);
+    } catch (error) {
+      console.error('[OtcEscrow] ❌ Atomic swap execution FAILED:', error);
+      throw new Error(`Atomic swap failed: ${error}`);
     }
   }
 
   /**
    * REAL atomic swap execution implementation
-   * Both contract invocations execute on Starknet Sepolia
+   * Executed on Starknet Sepolia contracts
+   * Step 1: Approve STRK transfer
+   * Step 2: Lock funds in escrow
+   * Step 3: Buy STRK (BTC → STRK bridge)
+   * Step 4: Sell STRK (STRK → BTC bridge)
    */
   private async executeAtomicSwapImpl(
     intentId: string,
     matchId: string,
     match: any
   ): Promise<{ transactionHash: string; escrowAddress: string; steps: any[] }> {
-    console.log(`\n${'═'.repeat(60)}`);
-    console.log(`[OtcEscrow] 🚀 EXECUTING REAL ATOMIC SWAP`);
-    console.log(`${'═'.repeat(60)}`);
-    console.log(`Match ID: ${matchId}`);
-    console.log(`Intent ID: ${intentId.slice(0, 20)}...`);
+    console.log(`\n${'═'.repeat(70)}`);
+    console.log(`[OtcEscrow] 🚀 REAL ATOMIC SWAP EXECUTION ON STARKNET SEPOLIA`);
+    console.log(`${'═'.repeat(70)}`);
 
     if (!this.account) {
       throw new Error(
-        'Executor account not configured! Set STARKNET_EXECUTOR_ADDRESS and STARKNET_EXECUTOR_PRIVATE_KEY'
+        '❌ Executor account not configured!\n' +
+        'Required environment variables:\n' +
+        '  - STARKNET_EXECUTOR_ADDRESS\n' +
+        '  - STARKNET_EXECUTOR_PRIVATE_KEY'
       );
     }
 
@@ -263,52 +285,61 @@ export class OtcEscrowService {
     const startTime = Date.now();
 
     try {
-      // Determine swap direction and configure parties
+      // Determine swap direction
       const partyASendsStrk = match.partyA.sendChain === 'strk';
+      const strkAmount = partyASendsStrk ? match.partyA.sendAmount : match.partyB.sendAmount;
+      const btcAmount = partyASendsStrk ? match.partyB.sendAmount : match.partyA.sendAmount;
+      const strkSellersAddress = partyASendsStrk ? match.partyA.wallet : match.partyB.wallet;
+      const btcSendersAddress = partyASendsStrk ? match.partyB.wallet : match.partyA.wallet;
 
-      console.log(`\n📊 Swap Direction:`);
-      if (partyASendsStrk) {
-        console.log(`  Party A (STRK seller) → sends ${match.partyA.sendAmount} STRK`);
-        console.log(`  Party B (BTC sender)  → receives ${match.partyA.sendAmount} STRK`);
-        console.log(`  Party B (BTC sender)  → sends ${match.partyB.sendAmount} BTC`);
-        console.log(`  Party A (STRK seller) → receives ${match.partyB.sendAmount} BTC`);
-      } else {
-        console.log(`  Party A (BTC sender)   → sends ${match.partyA.sendAmount} BTC`);
-        console.log(`  Party B (STRK seller)  → receives ${match.partyA.sendAmount} BTC`);
-        console.log(`  Party B (STRK seller)  → sends ${match.partyB.sendAmount} STRK`);
-        console.log(`  Party A (BTC sender)   → receives ${match.partyB.sendAmount} STRK`);
-      }
+      console.log(`\n📊 Swap Configuration:`);
+      console.log(`  Party A (${partyASendsStrk ? 'STRK Seller' : 'BTC Sender'}):`);
+      console.log(`    Wallet: ${match.partyA.wallet.slice(0, 20)}...`);
+      console.log(`    Sends: ${partyASendsStrk ? strkAmount + ' STRK' : btcAmount + ' BTC'}`);
+      console.log(`    Receives: ${partyASendsStrk ? btcAmount + ' BTC' : strkAmount + ' STRK'}`);
+      console.log(`  Party B (${partyASendsStrk ? 'BTC Sender' : 'STRK Seller'}):`);
+      console.log(`    Wallet: ${match.partyB.wallet.slice(0, 20)}...`);
+      console.log(`    Sends: ${partyASendsStrk ? btcAmount + ' BTC' : strkAmount + ' STRK'}`);
+      console.log(`    Receives: ${partyASendsStrk ? strkAmount + ' STRK' : btcAmount + ' BTC'}`);
 
       // ============================================
-      // STEP 1: APPROVE STRK TRANSFER (if needed)
+      // STEP 1: APPROVE STRK TRANSFER
       // ============================================
       steps.push({
         step: 1,
-        description: 'Verify STRK token approvals',
+        description: `Approve escrow to manage ${strkAmount} STRK`,
         status: 'in_progress',
+        txHash: null,
       });
 
       try {
-        // Approve escrow contract to manage STRK
-        const approvalAmount = BigInt(Math.floor(parseFloat(match.partyB.sendAmount) * 1e18));
+        const strkAmountScaled = BigInt(Math.floor(parseFloat(strkAmount) * 1e18));
         
-        console.log(`\n[Step 1] Approving STRK token transfer...`);
-        const approveTx = await this.account.execute([{
-          contractAddress: this.strkTokenAddress,
-          entrypoint: 'approve',
-          calldata: [this.escrowContractAddress, approvalAmount.toString(), '0'],
-        }]);
+        console.log(`\n[Step 1] 🔓 Approving STRK token for escrow...`);
+        console.log(`  Amount: ${strkAmount} STRK (${strkAmountScaled.toString()} base units)`);
+        console.log(`  Spender: ${this.escrowContractAddress.slice(0, 20)}...`);
+
+        const approveTx = await this.account.execute([
+          {
+            contractAddress: this.strkTokenAddress,
+            entrypoint: 'approve',
+            calldata: [this.escrowContractAddress, strkAmountScaled.toString(), '0'],
+          }
+        ]);
         
-        console.log(`  Approval TX: ${approveTx.transaction_hash}`);
+        console.log(`  TX Hash: ${approveTx.transaction_hash}`);
+        
+        // Wait for transaction confirmation
         await this.rpcProvider.waitForTransaction(approveTx.transaction_hash as string);
-        console.log(`  ✅ STRK approval confirmed`);
+        console.log(`  ✅ STRK approval confirmed on-chain`);
 
         steps[0].status = 'completed';
         steps[0].txHash = approveTx.transaction_hash;
       } catch (approvalError) {
-        console.warn(`  ⚠️ STRK approval failed (may already be approved):`, approvalError);
-        steps[0].status = 'skipped';
-        steps[0].note = 'Approval may already exist';
+        console.warn(`  ⚠️ STRK approval failed:`, approvalError);
+        steps[0].status = 'failed';
+        steps[0].error = String(approvalError);
+        throw new Error(`STRK approval failed: ${approvalError}`);
       }
 
       // ============================================
@@ -316,95 +347,145 @@ export class OtcEscrowService {
       // ============================================
       steps.push({
         step: 2,
-        description: `Lock ${partyASendsStrk ? match.partyA.sendAmount : match.partyB.sendAmount} STRK in escrow`,
+        description: `Lock ${strkAmount} STRK in escrow contract`,
         status: 'in_progress',
+        txHash: null,
       });
 
       try {
-        const lockAmount = BigInt(Math.floor(parseFloat(partyASendsStrk ? match.partyA.sendAmount : match.partyB.sendAmount) * 1e18));
+        const lockAmount = BigInt(Math.floor(parseFloat(strkAmount) * 1e18));
 
-        console.log(`\n[Step 2] Locking funds in escrow...`);
-        const lockTx = await this.account.execute([{
-          contractAddress: this.escrowContractAddress,
-          entrypoint: 'lock_funds',
-          calldata: [intentId, lockAmount.toString(), '0', this.executorAddress],
-        }]);
-        
-        console.log(`  Lock TX: ${lockTx.transaction_hash}`);
+        console.log(`\n[Step 2] 🔒 Locking funds in escrow contract...`);
+        console.log(`  Intent ID: ${intentId.slice(0, 20)}...`);
+        console.log(`  Amount: ${strkAmount} STRK (${lockAmount.toString()} base units)`);
+        console.log(`  Escrow: ${this.escrowContractAddress.slice(0, 20)}...`);
+
+        const lockTx = await this.account.execute([
+          {
+            contractAddress: this.escrowContractAddress,
+            entrypoint: 'lock_funds',
+            calldata: [intentId, lockAmount.toString(), '0', this.executorAddress],
+          }
+        ]);
+
+        console.log(`  TX Hash: ${lockTx.transaction_hash}`);
+
+        // Wait for transaction confirmation
         await this.rpcProvider.waitForTransaction(lockTx.transaction_hash as string);
-        console.log(`  ✅ Funds locked in escrow`);
+        console.log(`  ✅ Funds locked in escrow on-chain`);
 
         steps[1].status = 'completed';
         steps[1].txHash = lockTx.transaction_hash;
       } catch (lockError) {
         console.error(`  ❌ Escrow lock failed:`, lockError);
         steps[1].status = 'failed';
+        steps[1].error = String(lockError);
         throw new Error(`Failed to lock funds in escrow: ${lockError}`);
       }
 
       // ============================================
-      // STEP 3: CALL BuyStrkContract
+      // STEP 3: BUY STRK (Bridge BTC → STRK)
       // ============================================
-      console.log(`\n[Step 3] Calling BuyStrkContract...`);
       steps.push({
         step: 3,
-        description: `BuyStrkContract: Convert BTC to ${partyASendsStrk ? match.partyB.sendAmount : match.partyA.sendAmount} STRK`,
+        description: `Buy STRK: Convert ${btcAmount} BTC to STRK`,
         status: 'in_progress',
+        txHash: null,
       });
 
       try {
-        const buyStrkTx = await this.callBuyStrkReal(
-          partyASendsStrk ? match.partyB.wallet : match.partyA.wallet,  // buyer (receives STRK)
-          partyASendsStrk ? match.partyB.sendAmount : match.partyA.sendAmount,  // BTC amount (in BTC)
-          partyASendsStrk ? match.partyA.wallet : match.partyB.wallet  // seller
-        );
+        console.log(`\n[Step 3] 🌉 Bridging BTC to STRK via BuyStrkContract...`);
+        console.log(`  BTC Amount: ${btcAmount} BTC`);
+        console.log(`  Buyer (receives STRK): ${btcSendersAddress.slice(0, 20)}...`);
+        console.log(`  Seller (sends STRK): ${strkSellersAddress.slice(0, 20)}...`);
 
-        console.log(`  ✅ BuyStrkContract executed: ${buyStrkTx}`);
+        const buyStrkTx = await this.account.execute([
+          {
+            contractAddress: this.buyStrkContractAddress,
+            entrypoint: 'buy_strk_with_btc',
+            calldata: [
+              btcSendersAddress,  // buyer (receives STRK)
+              BigInt(Math.floor(parseFloat(btcAmount) * 1e8)).toString(),  // BTC amount in sats
+              '0',  // padding
+              strkSellersAddress,  // seller (sends STRK)
+            ],
+          }
+        ]);
+
+        console.log(`  TX Hash: ${buyStrkTx.transaction_hash}`);
+
+        // Wait for transaction confirmation
+        await this.rpcProvider.waitForTransaction(buyStrkTx.transaction_hash as string);
+        console.log(`  ✅ BTC→STRK bridge executed on-chain`);
+
         steps[2].status = 'completed';
-        steps[2].txHash = buyStrkTx;
+        steps[2].txHash = buyStrkTx.transaction_hash;
       } catch (buyError) {
-        console.error(`  ❌ BuyStrkContract failed:`, buyError);
+        console.error(`  ❌ BuyStrkContract execution failed:`, buyError);
         steps[2].status = 'failed';
         steps[2].error = String(buyError);
         throw new Error(`BuyStrkContract execution failed: ${buyError}`);
       }
 
       // ============================================
-      // STEP 4: CALL SellStrkContract
+      // STEP 4: SELL STRK (Bridge STRK → BTC)
       // ============================================
-      console.log(`\n[Step 4] Calling SellStrkContract...`);
       steps.push({
         step: 4,
-        description: `SellStrkContract: Convert ${partyASendsStrk ? match.partyA.sendAmount : match.partyB.sendAmount} STRK to BTC`,
+        description: `Sell STRK: Convert ${strkAmount} STRK to BTC`,
         status: 'in_progress',
+        txHash: null,
       });
 
       try {
-        const sellStrkTx = await this.callSellStrkReal(
-          partyASendsStrk ? match.partyA.wallet : match.partyB.wallet,  // seller (sends STRK)
-          partyASendsStrk ? match.partyA.sendAmount : match.partyB.sendAmount,  // STRK amount
-          partyASendsStrk ? match.partyB.wallet : match.partyA.wallet,  // buyer address
-          partyASendsStrk ? match.partyB.wallet : match.partyA.wallet  // BTC recipient
-        );
+        const strkAmountScaled = BigInt(Math.floor(parseFloat(strkAmount) * 1e18));
+        
+        console.log(`\n[Step 4] 🌉 Bridging STRK to BTC via SellStrkContract...`);
+        console.log(`  STRK Amount: ${strkAmount} STRK (${strkAmountScaled.toString()} base units)`);
+        console.log(`  Seller (sends STRK): ${strkSellersAddress.slice(0, 20)}...`);
+        console.log(`  Buyer (receives BTC): ${btcSendersAddress.slice(0, 20)}...`);
 
-        console.log(`  ✅ SellStrkContract executed: ${sellStrkTx}`);
+        // Convert BTC address to felt252
+        const btcAddressFelt = `0x${btcSendersAddress.slice(0, 60).padEnd(60, '0')}`;
+
+        const sellStrkTx = await this.account.execute([
+          {
+            contractAddress: this.sellStrkContractAddress,
+            entrypoint: 'sell_strk_for_btc',
+            calldata: [
+              strkSellersAddress,  // seller (sends STRK)
+              strkAmountScaled.toString(),  // STRK amount in base units
+              '0',  // padding
+              btcSendersAddress,  // buyer address
+              btcAddressFelt,  // BTC recipient (as felt252)
+            ],
+          }
+        ]);
+
+        console.log(`  TX Hash: ${sellStrkTx.transaction_hash}`);
+
+        // Wait for transaction confirmation
+        await this.rpcProvider.waitForTransaction(sellStrkTx.transaction_hash as string);
+        console.log(`  ✅ STRK→BTC bridge executed on-chain`);
+
         steps[3].status = 'completed';
-        steps[3].txHash = sellStrkTx;
+        steps[3].txHash = sellStrkTx.transaction_hash;
       } catch (sellError) {
-        console.error(`  ❌ SellStrkContract failed:`, sellError);
+        console.error(`  ❌ SellStrkContract execution failed:`, sellError);
         steps[3].status = 'failed';
         steps[3].error = String(sellError);
         throw new Error(`SellStrkContract execution failed: ${sellError}`);
       }
 
       // ============================================
-      // SUCCESS
+      // SUCCESS - All steps completed
       // ============================================
       const duration = Date.now() - startTime;
-      console.log(`\n${'═'.repeat(60)}`);
+      console.log(`\n${'═'.repeat(70)}`);
       console.log(`✅ ATOMIC SWAP COMPLETED SUCCESSFULLY`);
-      console.log(`${'═'.repeat(60)}`);
-      console.log(`Total execution time: ${duration}ms\n`);
+      console.log(`${'═'.repeat(70)}`);
+      console.log(`Total execution time: ${(duration / 1000).toFixed(2)}s`);
+      console.log(`All transactions confirmed on Starknet Sepolia\n`);
 
       return {
         transactionHash: (steps[3].txHash || steps[2].txHash) as string,
@@ -414,108 +495,20 @@ export class OtcEscrowService {
 
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.error(`\n${'═'.repeat(60)}`);
-      console.error(`❌ ATOMIC SWAP FAILED`);
-      console.error(`${'═'.repeat(60)}`);
+      console.error(`\n${'═'.repeat(70)}`);
+      console.error(`❌ ATOMIC SWAP EXECUTION FAILED`);
+      console.error(`${'═'.repeat(70)}`);
       console.error(`Error: ${error}`);
-      console.error(`Duration: ${duration}ms\n`);
+      console.error(`Duration: ${(duration / 1000).toFixed(2)}s\n`);
 
-      // Mark failed steps
+      // Mark any in-progress steps as failed
       for (const step of steps) {
         if (step.status === 'in_progress') {
           step.status = 'failed';
+          step.error = 'Execution halted due to previous step failure';
         }
       }
 
-      throw new Error(`Atomic swap failed: ${error}`);
-    }
-  }
-
-  /**
-   * REAL BuyStrkContract call
-   */
-  private async callBuyStrkReal(
-    buyerAddress: string,
-    btcAmount: string,
-    sellerAddress: string
-  ): Promise<string> {
-    console.log(`[BuyStrk] Preparing BTC→STRK conversion:`);
-    console.log(`  Buyer: ${buyerAddress.slice(0, 10)}...`);
-    console.log(`  BTC Amount: ${btcAmount}`);
-    console.log(`  Seller: ${sellerAddress.slice(0, 10)}...`);
-
-    if (!this.account) {
-      throw new Error('Executor account not available');
-    }
-
-    try {
-      // Convert BTC to satoshis (1 BTC = 100,000,000 sats)
-      const btcAmountSats = BigInt(Math.floor(parseFloat(btcAmount) * 1e8));
-
-      console.log(`  Calling: buy_strk_with_btc(${buyerAddress}, ${btcAmountSats}, ${sellerAddress})`);
-
-      const tx = await this.account.execute([{
-        contractAddress: this.buyStrkContractAddress,
-        entrypoint: 'buy_strk_with_btc',
-        calldata: [buyerAddress, btcAmountSats.toString(), '0', sellerAddress],
-      }]);
-
-      console.log(`[BuyStrk] TX sent: ${tx.transaction_hash}`);
-      
-      // Wait for confirmation
-      const receipt = await this.rpcProvider.waitForTransaction(tx.transaction_hash as string);
-      console.log(`[BuyStrk] ✅ Transaction confirmed`);
-
-      return tx.transaction_hash as string;
-    } catch (error) {
-      console.error(`[BuyStrk] ❌ Contract call failed:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * REAL SellStrkContract call
-   */
-  private async callSellStrkReal(
-    sellerAddress: string,
-    strkAmount: string,
-    buyerAddress: string,
-    btcRecipient: string
-  ): Promise<string> {
-    console.log(`[SellStrk] Preparing STRK→BTC conversion:`);
-    console.log(`  Seller: ${sellerAddress.slice(0, 10)}...`);
-    console.log(`  STRK Amount: ${strkAmount}`);
-    console.log(`  Buyer: ${buyerAddress.slice(0, 10)}...`);
-    console.log(`  BTC Recipient: ${btcRecipient.slice(0, 10)}...`);
-
-    if (!this.account) {
-      throw new Error('Executor account not available');
-    }
-
-    try {
-      // Convert STRK amount (18 decimals)
-      const strkAmountScaled = BigInt(Math.floor(parseFloat(strkAmount) * 1e18));
-
-      // Convert Bitcoin address to felt252
-      const btcAddressFelt = `0x${btcRecipient.slice(0, 60).padEnd(60, '0')}`;
-
-      console.log(`  Calling: sell_strk_for_btc(${sellerAddress}, ${strkAmountScaled}, ${buyerAddress}, ${btcAddressFelt})`);
-
-      const tx = await this.account.execute([{
-        contractAddress: this.sellStrkContractAddress,
-        entrypoint: 'sell_strk_for_btc',
-        calldata: [sellerAddress, strkAmountScaled.toString(), '0', buyerAddress, btcAddressFelt],
-      }]);
-
-      console.log(`[SellStrk] TX sent: ${tx.transaction_hash}`);
-      
-      // Wait for confirmation
-      const receipt = await this.rpcProvider.waitForTransaction(tx.transaction_hash as string);
-      console.log(`[SellStrk] ✅ Transaction confirmed`);
-
-      return tx.transaction_hash as string;
-    } catch (error) {
-      console.error(`[SellStrk] ❌ Contract call failed:`, error);
       throw error;
     }
   }

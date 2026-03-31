@@ -240,7 +240,7 @@ export function OtcIntentPage() {
       setStarknetConnected(true);
       
       // Fetch balances
-      const balances = await fetchAllBalances(selectedAddress, btcAddress);
+      const balances = await fetchAllBalances(selectedAddress, btcAddress ?? undefined);
       setStoreBalances(balances.btc, balances.strk, balances.eth);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Starknet connection failed";
@@ -433,14 +433,15 @@ export function OtcIntentPage() {
           }
         );
 
-        const { intentId, messageToSign } = validateResponse;
+        const { intentId, messageToSign, match, hasMatch } = validateResponse;
         // messageToSign is an object with { message, intentId, sendAmount, receiveAmount, sendChain, receiveChain }
-        let messageText = typeof messageToSign === 'string' ? messageToSign : messageToSign.message;
+        let messageText = typeof messageToSign === 'string' ? messageToSign : (messageToSign as any)?.message || messageToSign;
         
         // Shorten message for wallet signing (Starknet has character limits)
         // Extract key info: intentId (first 10 chars), amount, chains
         const shortMessage = `OTC:${intentId.slice(0, 10)}`;
         console.log("[OTC-INTENT] Validation passed, signing with intent ID:", shortMessage);
+        console.log("[OTC-INTENT] Match info:", { hasMatch, match });
 
         // ============================================
         // STEP 2: Request wallet signature
@@ -602,47 +603,55 @@ export function OtcIntentPage() {
         }
 
         // ============================================
-        // STEP 3: Execute intent with signature
+        // STEP 3: Check if match found, if so navigate to swap-matching
         // ============================================
-        setSuccess("Step 3: Executing bridge swap...");
+        console.log("[OTC-INTENT] After signing, checking match status:", { hasMatch, match });
         
-        const executeResponse = await requestJson<{ transactionHash: string }>(
-          "/api/otc/intents",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              walletAddress: wallet,
-              intentId, // <- From step 1
-              signature: signatureStr, // <- From step 2, already stringified
-              amount: amountNum,
-              priceThreshold: priceThresholdNum,
+        if (hasMatch && match) {
+          // Match found! Navigate to swap-matching interface
+          console.log("[OTC-INTENT] ✅ Match found during validation! Navigating to swap-matching...");
+          setSuccess(
+            `✅ Match found!\n` +
+            `Your intent matched with another user.\n` +
+            `Both parties must fund escrow to execute the swap.`
+          );
+          
+          setTimeout(() => {
+            const params = new URLSearchParams({
+              matchId: match.matchId || `match_${intentId}`,
+              intentId: intentId,
+              sendAmount: String(intent.amount || ''),
               sendChain: intent.sendChain,
+              receiveAmount: String(intent.priceThreshold || ''),
               receiveChain: intent.receiveChain,
-              receiveWalletAddress: intent.receiveWalletAddress,
-              step: "execute", // <- STEP 3
-            }),
-          }
-        );
+              walletAddress: typeof wallet === 'string' ? wallet : wallet?.address || '',
+              matchedWith: match.matchedWith || match.intentB || '',
+              partyB: match.partyB || '',
+            });
+            console.log("[OTC-INTENT] Navigating to swap-matching with params:", params.toString());
+            router.push(`/swap-matching?${params.toString()}`);
+          }, 1000);
+        } else {
+          // No match yet, navigate to waiting page
+          console.log("[OTC-INTENT] No match yet, navigating to waiting page...");
+          setSuccess(
+            `✓ Intent successfully signed!\n` +
+            `Waiting for matching...\n` +
+            `Your intent ID: ${intentId.slice(0, 10)}`
+          );
 
-        console.log("[OTC-INTENT] Execution complete:", executeResponse);
-        setSuccess(
-          `✓ Intent submitted successfully!\n` +
-          `Transaction Hash: ${executeResponse.transactionHash || 'pending'}\n` +
-          `Waiting for match...`
-        );
-
-        // Redirect to waiting/matching page to show order book and wait for match
-        setTimeout(() => {
-          const params = new URLSearchParams({
-            intentId: intentId,
-            sendAmount: intent.amount,
-            sendChain: intent.sendChain,
-            receiveAmount: intent.priceThreshold,
-            receiveChain: intent.receiveChain,
-            walletAddress: wallet,
-          });
-          router.push(`/otc-waiting?${params.toString()}`);
-        }, 1000);
+          setTimeout(() => {
+            const params = new URLSearchParams({
+              intentId: intentId,
+              sendAmount: String(intent.amount || ''),
+              sendChain: intent.sendChain,
+              receiveAmount: String(intent.priceThreshold || ''),
+              receiveChain: intent.receiveChain,
+              walletAddress: typeof wallet === 'string' ? wallet : wallet?.address || '',
+            });
+            router.push(`/otc-waiting?${params.toString()}`);
+          }, 1000);
+        }
 
         await fetchBackendState();
       } catch (submitError) {
@@ -825,7 +834,7 @@ export function OtcIntentPage() {
                 <strong>Receiver ({intent.receiveChain.toUpperCase()}):</strong> {intent.receiveWalletAddress ? `${intent.receiveWalletAddress.slice(0, 10)}...${intent.receiveWalletAddress.slice(-10)}` : "Will auto-fill"}
               </p>
               <p className="pt-2 text-purple-700">
-                You will <strong>send {intent.sendAmount || "?"} {intent.sendChain.toUpperCase()}</strong> and 
+                You will <strong>send {intent.amount || "?"} {intent.sendChain.toUpperCase()}</strong> and 
                 <strong> receive {intent.priceThreshold || "?"} {intent.receiveChain.toUpperCase()}</strong>.
               </p>
             </div>
