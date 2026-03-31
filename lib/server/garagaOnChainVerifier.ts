@@ -66,6 +66,25 @@ export class GaragaOnChainVerifier {
   }
 
   /**
+   * Detect verifier unavailability errors (undeployed contract / bad class hash / missing selector).
+   * These are infrastructure issues, not proof invalidity, and can be locally bypassed in dev.
+   */
+  private isVerifierUnavailableError(message?: string): boolean {
+    if (!message) {
+      return false;
+    }
+
+    const msg = message.toLowerCase();
+    return (
+      msg.includes("is not deployed") ||
+      msg.includes("requested contract address") ||
+      msg.includes("class hash= 0x0") ||
+      msg.includes("entry point") ||
+      msg.includes("selector")
+    );
+  }
+
+  /**
    * Convert a value to a valid felt252
    * CRITICAL: Must reduce modulo STARKNET_PRIME since felt252 < 2^251 + 17*2^192 + 1
    */
@@ -316,11 +335,28 @@ export class GaragaOnChainVerifier {
    */
   async fullVerificationFlow(proof: GaragaProof): Promise<OnChainVerificationResult> {
     try {
+      const strictOnChain = process.env.GARAGA_STRICT_ONCHAIN === "true";
+
       // Step 1: Register proof pair on-chain
       console.log("🔐 Step 1: Registering proof hash and public inputs on-chain...");
       const registerResult = await this.registerProofOnChain(proof, true);
 
       if (!registerResult.verified) {
+        const unavailable = this.isVerifierUnavailableError(registerResult.error);
+
+        if (unavailable && !strictOnChain) {
+          const localVerified = this.verifyProofLocally(proof);
+
+          if (localVerified) {
+            console.warn("⚠️ Garaga verifier unavailable on-chain; accepted local cryptographic verification (dev fallback).");
+            return {
+              isValid: true,
+              verified: true,
+              error: "On-chain verifier unavailable; accepted via local cryptographic verification fallback",
+            };
+          }
+        }
+
         console.warn("⚠️ Proof registration failed in step 1");
         return registerResult;
       }

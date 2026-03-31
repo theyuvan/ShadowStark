@@ -277,6 +277,7 @@ async function validateIntentStep(body: IntentBody): Promise<Response> {
   const responseData: any = {
     step: "validate",
     status: "ready_for_signing",
+    hasMatch: false,
     message: "✅ ZK proof verified successfully. User can now sign the intent data.",
     intentId,
     
@@ -354,6 +355,7 @@ async function validateIntentStep(body: IntentBody): Promise<Response> {
 
   // If a match was found, include match details
   if (matchResult.match) {
+    responseData.hasMatch = true;
     responseData.match = {
       matchId: matchResult.match.matchId,
       matchedWith: matchResult.match.intentB,
@@ -362,6 +364,7 @@ async function validateIntentStep(body: IntentBody): Promise<Response> {
       message: `✅ MATCHED! Your intent was matched with another user. Both parties need to sign to execute the atomic swap through escrow.`,
     };
   } else {
+    responseData.hasMatch = false;
     responseData.matchStatus = {
       status: 'pending',
       message: `⏳ Waiting for matching. Your intent is now in the order book.`,

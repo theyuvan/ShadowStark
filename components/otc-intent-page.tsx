@@ -620,11 +620,11 @@ export function OtcIntentPage() {
             const params = new URLSearchParams({
               matchId: match.matchId || `match_${intentId}`,
               intentId: intentId,
-              sendAmount: String(intent.amount || ''),
+              amount: String(intent.amount || ''),
               sendChain: intent.sendChain,
-              receiveAmount: String(intent.priceThreshold || ''),
+              price: String(intent.priceThreshold || ''),
               receiveChain: intent.receiveChain,
-              walletAddress: typeof wallet === 'string' ? wallet : wallet?.address || '',
+              wallet: typeof wallet === 'string' ? wallet : wallet?.address || '',
               matchedWith: match.matchedWith || match.intentB || '',
               partyB: match.partyB || '',
             });

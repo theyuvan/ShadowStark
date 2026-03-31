@@ -10,10 +10,60 @@ export async function GET(request: Request) {
   try {
     ensureApiKeyIfConfigured(request);
     const { searchParams } = new URL(request.url);
+    const matchId = searchParams.get("matchId");
     const walletAddress = searchParams.get("walletAddress");
     const view = searchParams.get("view") || "all"; // "all", "pending", "matches"
 
     const matchingService = OtcMatchingService.getInstance();
+
+    // Direct match lookup for swap-matching page
+    if (matchId) {
+      const match = matchingService.getMatch(matchId);
+
+      if (!match) {
+        return NextResponse.json({
+          type: "match_details",
+          matches: [],
+          message: "Match not found",
+        });
+      }
+
+      const isParticipant =
+        !walletAddress ||
+        match.partyA.wallet === walletAddress ||
+        match.partyB.wallet === walletAddress;
+
+      if (!isParticipant) {
+        return NextResponse.json({
+          type: "match_details",
+          matches: [],
+          message: "Match exists but wallet is not a participant",
+        });
+      }
+
+      const intentA = matchingService.getIntent(match.intentA);
+      const intentB = matchingService.getIntent(match.intentB);
+
+      const matchDetails = {
+        ...match,
+        partyA: {
+          ...match.partyA,
+          signed: !!intentA?.signature || !!match.partyA.signed,
+          fundedToEscrow: !!match.partyA.fundedToEscrow,
+        },
+        partyB: {
+          ...match.partyB,
+          signed: !!intentB?.signature || !!match.partyB.signed,
+          fundedToEscrow: !!match.partyB.fundedToEscrow,
+        },
+      };
+
+      return NextResponse.json({
+        type: "match_details",
+        matches: [matchDetails],
+        match: matchDetails,
+      });
+    }
     
     if (view === "pending") {
       // Show pending intents (order book)
