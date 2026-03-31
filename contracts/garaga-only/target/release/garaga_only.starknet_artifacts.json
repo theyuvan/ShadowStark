@@ -1,0 +1,1 @@
+{"version":1,"contracts":[{"id":"pa95csg0ohk92","package_name":"garaga_only","contract_name":"GaragaVerifier","module_path":"garaga_only::garaga_verifier::GaragaVerifier","artifacts":{"sierra":"garaga_only_GaragaVerifier.contract_class.json","casm":null}}]}

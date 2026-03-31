@@ -5,6 +5,7 @@ import { clearOtcState, submitIntent } from "@/lib/server/otcStateStore";
 import { CrossChainService } from "@/lib/server/crossChainService";
 import { PythPriceService } from "@/lib/server/pythPriceService";
 import { ZKProofService } from "@/lib/server/zkProofService";
+import { GaragaOnChainVerifier, getGaragaVerifier } from "@/lib/server/garagaOnChainVerifier";
 import { Web3IntegrationService } from "@/lib/server/web3IntegrationService";
 import { OtcMatchingService, type OtcIntent } from "@/lib/server/otcMatchingService";
 import { DiagnosticService } from "@/lib/server/diagnosticService";
@@ -194,7 +195,46 @@ async function validateIntentStep(body: IntentBody): Promise<Response> {
     receiveWalletAddress!
   );
 
-  // Submit intent to OTC matching service
+  // ===== STEP 1: VERIFY ZK PROOF (LOCAL + ON-CHAIN) =====
+  console.log(`\n🔐 [VALIDATE] Verifying ZK proof...`);
+  let onChainVerificationResult: any = { isValid: false, verified: false, error: undefined };
+  
+  try {
+    const garagaVerifier = getGaragaVerifier();
+    onChainVerificationResult = await garagaVerifier.fullVerificationFlow(zkProof as any);
+    
+    if (!onChainVerificationResult.verified) {
+      console.error(`❌ [VALIDATE] ZK proof verification FAILED:`, onChainVerificationResult.error);
+      return NextResponse.json(
+        { 
+          error: "ZK proof verification failed - cannot proceed with intent",
+          details: onChainVerificationResult.error,
+          intentId: null
+        },
+        { status: 400 }
+      );
+    }
+    
+    console.log(`✅ [VALIDATE] ZK proof verified successfully!`, {
+      intentId: intentId.slice(0, 10),
+      proofHash: zkProof.proofHash.slice(0, 10),
+      verified: true,
+      constraintCount: zkProof.constraintCount,
+    });
+  } catch (verifyError) {
+    console.error(`❌ [VALIDATE] Proof verification error:`, verifyError);
+    return NextResponse.json(
+      { 
+        error: "Failed to verify ZK proof",
+        details: String(verifyError),
+        intentId: null
+      },
+      { status: 500 }
+    );
+  }
+
+  // ===== STEP 2: SUBMIT INTENT TO MATCHING SERVICE =====
+  // Now that proof is verified, we can accept the intent
   const matchingService = OtcMatchingService.getInstance();
   const otcIntent: OtcIntent = {
     intentId,
@@ -236,14 +276,53 @@ async function validateIntentStep(body: IntentBody): Promise<Response> {
 
   const responseData: any = {
     step: "validate",
-    status: "zk_proof_verified",
+    status: "ready_for_signing",
+    message: "✅ ZK proof verified successfully. User can now sign the intent data.",
     intentId,
+    
+    // ZK Proof Details
     zkProof: {
       proofHash: zkProof.proofHash,
       commitment: zkProof.commitment,
       nullifier: zkProof.nullifier,
       verified: zkProof.verified,
+      circuitExecuted: zkProof.circuitExecuted,
+      constraintCount: zkProof.constraintCount,
       timestamp: zkProof.timestamp,
+    },
+    
+    // Verification Status
+    verification: {
+      localCryptographicVerification: true,
+      onChainVerification: onChainVerificationResult.verified || false,
+      message: "✅ All verification checks passed",
+    },
+    
+    // Intent Data (ready to be signed)
+    dataToSign: {
+      intentId,
+      walletAddress,
+      sendChain,
+      receiveChain,
+      sendAmount: amount,
+      receiveAmount: priceThreshold,
+      receiveWalletAddress,
+      timestamp: Math.floor(Date.now() / 1000),
+    },
+    
+    // Next Steps
+    nextStep: {
+      action: "sign",
+      message: "User should sign the dataToSign with their wallet to proceed to execution",
+      expectedSignature: "Bitcoin or Starknet signature",
+    },
+    
+    zkCircuitExecution: {
+      executed: true,
+      framework: "Garaga (Real ZK Circuits)",
+      constraintsSolved: (zkProof as any).constraintCount || 0,
+      amountsVerified: (zkProof as any).publicInputs?.amountsVerified || false,
+      priceVerified: (zkProof as any).priceVerified || false,
     },
     priceVerification: {
       oracleRate: oracleRate.toFixed(8),
@@ -255,14 +334,14 @@ async function validateIntentStep(body: IntentBody): Promise<Response> {
     },
     messageToSign: {
       // User needs to sign this message with their wallet
-      message: `Sign this intent: ${intentId}\nSwap ${amount} ${sendChain.toUpperCase()} for ~${priceThreshold} ${receiveChain.toUpperCase()}\nRate: ${statedRate.toFixed(8)}`,
+      message: `Sign this intent: ${intentId}\nSwap ${amount} ${(sendChain as string).toUpperCase()} for ~${priceThreshold} ${(receiveChain as string).toUpperCase()}\nRate: ${statedRate.toFixed(8)}`,
       intentId,
       sendAmount: amount!.toString(),
       receiveAmount: priceThreshold.toString(),
       sendChain,
       receiveChain,
     },
-    nextStep: {
+    executeStep: {
       action: "POST /api/otc/intents",
       method: "execute",
       params: {
@@ -322,10 +401,11 @@ async function executeIntentStep(body: IntentBody): Promise<Response> {
   }
 
   console.log(`[INTENT-EXECUTE] Signature verified for wallet: ${body.walletAddress}`);
+  console.log(`[INTENT-EXECUTE] Send chain: ${body.sendChain}`);
   const signatureStr = typeof body.signature === 'string' 
     ? body.signature 
     : JSON.stringify(body.signature);
-  console.log(`[INTENT-EXECUTE] Signature: ${signatureStr.substring(0, 20)}...`);
+  console.log(`[INTENT-EXECUTE] Signature (${body.sendChain}): ${signatureStr.substring(0, 20)}...`);
   console.log(`[INTENT-EXECUTE] Intent ID: ${body.intentId}`);
 
   // ============================================
@@ -363,6 +443,10 @@ async function executeIntentStep(body: IntentBody): Promise<Response> {
       }
     }
 
+    // Get signatures from both intents (define outside if/else for scope)
+    const intentA = match ? matchingService.getIntent(match.intentA) : null;
+    const intentB = match ? matchingService.getIntent(match.intentB) : null;
+
     if (match && matchingService.areIntentsApproved(match.matchId)) {
       console.log(`[INTENT-EXECUTE] 🎯 Both intents signed! Executing atomic swap via escrow...`);
       
@@ -375,9 +459,6 @@ async function executeIntentStep(body: IntentBody): Promise<Response> {
         const { OtcEscrowService } = await import('@/lib/server/otcEscrowService');
         const escrowService = OtcEscrowService.getInstance();
 
-        // Get signatures from both intents
-        const intentA = matchingService.getIntent(match.intentA);
-        const intentB = matchingService.getIntent(match.intentB);
         const sigA = intentA?.signature || '';
         const sigB = intentB?.signature || '';
 

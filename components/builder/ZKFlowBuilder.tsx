@@ -169,7 +169,7 @@ export function ZKFlowBuilder() {
     [constraints],
   );
   const nodeTypesList = graph.nodes.map((node) => node.type);
-  const selectedPathValid = templatePathValid(selectedTemplate, nodeTypesList);
+  const selectedPathValid = templatePathValid(selectedTemplate, nodeTypesList as any);
   const canCompileWithDeposit = depositConfirmed && depositAmount > 0;
 
   const onDrop: React.DragEventHandler<HTMLDivElement> = (event) => {

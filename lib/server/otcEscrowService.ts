@@ -130,12 +130,13 @@ export class OtcEscrowService {
     // Initialize executor account (REQUIRED for real execution)
     if (process.env.STARKNET_EXECUTOR_ADDRESS && process.env.STARKNET_EXECUTOR_PRIVATE_KEY) {
       try {
-        // Create account with configuration object
-        this.account = new Account({
-          nodeUrl: 'https://sepolia.rpc.starknet.rs',
-          contractAddress: process.env.STARKNET_EXECUTOR_ADDRESS,
-          privateKey: process.env.STARKNET_EXECUTOR_PRIVATE_KEY,
-        } as any);
+        // Create account with proper Starknet.js Account constructor
+        // new Account(provider, address, privateKey or keyPair)
+        this.account = new Account(
+          this.rpcProvider,
+          process.env.STARKNET_EXECUTOR_ADDRESS,
+          process.env.STARKNET_EXECUTOR_PRIVATE_KEY
+        );
         console.log('[OtcEscrow] ✅ Executor account initialized for REAL contract execution');
       } catch (error) {
         console.error('[OtcEscrow] ❌ Failed to initialize executor account:', error);

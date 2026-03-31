@@ -110,39 +110,91 @@ export function SwapMatchingInterface({
   const otherParty = isPartyA ? match?.partyB : match?.partyA;
 
   const handleSignMatch = async () => {
-    if (!match) return;
+    if (!match || !currentParty) return;
 
     setSigning(true);
     setError(null);
     setSuccess(null);
 
     try {
-      // Request signature from Starknet wallet
-      const starknet = (window as any).starknet;
-      if (!starknet || !starknet.account) {
-        throw new Error("Starknet wallet not connected. Please open Argent X or Braavos.");
-      }
+      // Request signature from appropriate wallet based on sendChain
+      let signature: string;
+      
+      if (currentParty.sendChain === "btc") {
+        // ===== BTC SIGNING WITH XVERSE/UNISAT =====
+        let bitcoinProvider = (window as any).unisat || (window as any).xverse;
+        
+        if (!bitcoinProvider) {
+          // Try sats-connect as fallback
+          try {
+            const { request: satsRequest } = await import('sats-connect');
+            
+            console.log("[SWAP-MATCH] Using sats-connect for BTC signature...");
+            const messageToSign = `MATCH:${matchId.slice(0, 10)}`;
+            const response = await satsRequest('signMessage', {
+              address: walletAddress,
+              message: messageToSign,
+            });
+            
+            const status = (response as { status?: string }).status;
+            if (status === 'success' && (response as any).result?.signature) {
+              signature = (response as any).result.signature;
+              console.log("[SWAP-MATCH] BTC signature from sats-connect:", typeof signature);
+            } else {
+              throw new Error("sats-connect signing failed");
+            }
+          } catch (satsError) {
+            throw new Error(
+              "Bitcoin wallet not connected. Please ensure Xverse or Unisat is installed, unlocked, and visible in your browser toolbar."
+            );
+          }
+        } else {
+          // Use direct provider
+          console.log("[SWAP-MATCH] Using direct Bitcoin wallet provider for signature...");
+          const messageToSign = `MATCH:${matchId.slice(0, 10)}`;
+          try {
+            signature = await bitcoinProvider.signMessage(messageToSign, "utf8");
+            console.log("[SWAP-MATCH] BTC signature from Xverse/Unisat:", typeof signature);
+          } catch (providerError) {
+            const providerMsg = providerError instanceof Error ? providerError.message : String(providerError);
+            throw new Error(
+              `Bitcoin wallet signature failed: ${providerMsg}\n\n` +
+              "Please ensure your Bitcoin wallet is open, unlocked, and visible in your browser."
+            );
+          }
+        }
+        
+      } else {
+        // ===== STRK SIGNING WITH STARKNET WALLET =====
+        const starknet = (window as any).starknet;
+        if (!starknet || !starknet.account) {
+          throw new Error("Starknet wallet not connected. Please open Argent X or Braavos.");
+        }
 
-      const shortMessage = `MATCH:${matchId.slice(0, 10)}`;
-      const signature = await starknet.account.signMessage({
-        types: {
-          StarkNetDomain: [
-            { name: "name", type: "shortstring" },
-            { name: "version", type: "shortstring" },
-            { name: "chainId", type: "shortstring" },
-          ],
-          Message: [{ name: "message", type: "string" }],
-        },
-        primaryType: "Message",
-        domain: {
-          name: "ShadowFlow OTC",
-          version: "1",
-          chainId: "SN_SEPOLIA",
-        },
-        message: {
-          message: shortMessage,
-        },
-      });
+        const shortMessage = `MATCH:${matchId.slice(0, 10)}`;
+        console.log("[SWAP-MATCH] Using Starknet wallet for signature...");
+        signature = await starknet.account.signMessage({
+          types: {
+            StarkNetDomain: [
+              { name: "name", type: "shortstring" },
+              { name: "version", type: "shortstring" },
+              { name: "chainId", type: "shortstring" },
+            ],
+            Message: [{ name: "message", type: "string" }],
+          },
+          primaryType: "Message",
+          domain: {
+            name: "ShadowFlow OTC",
+            version: "1",
+            chainId: "SN_SEPOLIA",
+          },
+          message: {
+            message: shortMessage,
+          },
+        });
+        
+        console.log("[SWAP-MATCH] STRK signature from Starknet:", typeof signature);
+      }
 
       const signatureStr = typeof signature === "string" ? signature : JSON.stringify(signature);
 
@@ -154,15 +206,17 @@ export function SwapMatchingInterface({
           intentId,
           signature: signatureStr,
           walletAddress,
+          sendChain: currentParty.sendChain,
           step: "execute",
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to submit signature");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to submit signature");
       }
 
-      setSuccess("✓ Your signature recorded!");
+      setSuccess(`✓ Your ${currentParty.sendChain.toUpperCase()} wallet signature recorded!`);
       setStep("signed");
 
       // Refetch match status
@@ -178,6 +232,7 @@ export function SwapMatchingInterface({
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to sign match";
       setError(msg);
+      console.error("[SWAP-MATCH] Signing error:", err);
     } finally {
       setSigning(false);
     }
@@ -195,23 +250,58 @@ export function SwapMatchingInterface({
       let signature = "";
 
       if (currentParty.sendChain === "btc") {
-        // Request BTC signature from Xverse/Unisat
-        const bitcoinProvider = (window as any).unisat || (window as any).xverse;
+        // ===== BTC SIGNING WITH XVERSE/UNISAT =====
+        let bitcoinProvider = (window as any).unisat || (window as any).xverse;
+        
         if (!bitcoinProvider) {
-          throw new Error("Bitcoin wallet not connected. Please open Xverse or Unisat.");
+          // Try sats-connect as fallback
+          try {
+            const { request: satsRequest } = await import('sats-connect');
+            
+            console.log("[ESCROW-FUND] Using sats-connect for BTC signature...");
+            const messageToSign = `OTC_ESCROW_FUND:${intentId}:${matchId}:${currentParty.sendAmount}:btc`;
+            const response = await satsRequest('signMessage', {
+              address: walletAddress,
+              message: messageToSign,
+            });
+            
+            const status = (response as { status?: string }).status;
+            if (status === 'success' && (response as any).result?.signature) {
+              signature = (response as any).result.signature;
+              console.log("[ESCROW-FUND] BTC signature from sats-connect:", typeof signature);
+            } else {
+              throw new Error("sats-connect signing failed");
+            }
+          } catch (satsError) {
+            throw new Error(
+              "Bitcoin wallet not connected. Please ensure Xverse or Unisat is installed, unlocked, and visible in your browser toolbar."
+            );
+          }
+        } else {
+          // Use direct provider
+          console.log("[ESCROW-FUND] Using direct Bitcoin wallet provider for signature...");
+          const messageToSign = `OTC_ESCROW_FUND:${intentId}:${matchId}:${currentParty.sendAmount}:btc`;
+          try {
+            signature = await bitcoinProvider.signMessage(messageToSign, "utf8");
+            console.log("[ESCROW-FUND] BTC signature from Xverse/Unisat:", typeof signature);
+          } catch (providerError) {
+            const providerMsg = providerError instanceof Error ? providerError.message : String(providerError);
+            throw new Error(
+              `Bitcoin wallet signature failed: ${providerMsg}\n\n` +
+              "Please ensure your Bitcoin wallet is open, unlocked, and visible in your browser."
+            );
+          }
         }
-
-        const messageToSign = `OTC_ESCROW_FUND:${intentId}:${matchId}:${currentParty.sendAmount}:btc`;
-        const result = await bitcoinProvider.signMessage(messageToSign, "utf8");
-        signature = result;
+        
       } else {
-        // Request STRK signature from Starknet wallet
+        // ===== STRK SIGNING WITH STARKNET WALLET =====
         const starknet = (window as any).starknet;
         if (!starknet || !starknet.account) {
           throw new Error("Starknet wallet not connected. Please open Argent X or Braavos.");
         }
 
         const messageToSign = `OTC_ESCROW_FUND:${intentId}:${matchId}:${currentParty.sendAmount}:strk`;
+        console.log("[ESCROW-FUND] Using Starknet wallet for signature...");
         const messageHash = await starknet.account.signMessage({
           types: {
             StarkNetDomain: [
@@ -233,6 +323,7 @@ export function SwapMatchingInterface({
         });
 
         signature = typeof messageHash === "string" ? messageHash : JSON.stringify(messageHash);
+        console.log("[ESCROW-FUND] STRK signature from Starknet:", typeof signature);
       }
 
       // Call escrow funding endpoint
@@ -288,6 +379,7 @@ export function SwapMatchingInterface({
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to fund escrow";
       setError(msg);
+      console.error("[ESCROW-FUND] Error:", err);
     } finally {
       setFundingToEscrow(false);
     }

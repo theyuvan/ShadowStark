@@ -450,40 +450,127 @@ export function OtcIntentPage() {
         let signature: string;
         let signatureStr: string; // Declare in outer scope
         try {
-          // Request signature from Starknet wallet (Argent X or Braavos)
-          const starknet = (window as any).starknet;
-          if (!starknet || !starknet.account) {
-            throw new Error(
-              "Starknet wallet not connected. Please install and open Argent X or Braavos in your browser."
-            );
+          // Request signature from appropriate wallet based on sendChain
+          if (intent.sendChain === 'btc') {
+            // ===== BTC SIGNING WITH XVERSE/UNISAT =====
+            // Try multiple methods to access Bitcoin wallet
+            let bitcoinProvider = (window as any).unisat || (window as any).xverse;
+            
+            // If not immediately available, try sats-connect as fallback
+            if (!bitcoinProvider) {
+              try {
+                // Try using sats-connect library (same as useXverseWallet hook)
+                const { request: satsRequest } = await import('sats-connect');
+                
+                console.log("[OTC-INTENT] Using sats-connect to sign message...");
+                const response = await satsRequest('signMessage', {
+                  address: walletAddress,
+                  message: shortMessage,
+                });
+                
+                // Handle sats-connect response
+                const status = (response as { status?: string }).status;
+                if (status === 'success' && (response as any).result?.signature) {
+                  signature = (response as any).result.signature;
+                  signatureStr = typeof signature === 'string' ? signature : JSON.stringify(signature);
+                  console.log("[OTC-INTENT] BTC Signature from sats-connect:", typeof signature);
+                  setSuccess("Step 2: ✓ BTC Wallet Signature granted!");
+                } else {
+                  throw new Error("sats-connect signing failed");
+                }
+              } catch (satsError) {
+                // sats-connect failed, fall back to direct provider access
+                throw new Error(
+                  "Bitcoin wallet not connected. Please ensure:\n" +
+                  "1. Xverse or Unisat wallet extension is installed\n" +
+                  "2. Wallet is open, unlocked, and visible in your browser toolbar\n" +
+                  "3. You have approved the wallet connection\n\n" +
+                  "If problem continues, refresh the page and reconnect your wallet."
+                );
+              }
+            } else {
+              // Bitcoin provider is available, use direct signMessage
+              try {
+                console.log("[OTC-INTENT] Using direct Bitcoin wallet provider to sign message...");
+                signature = await bitcoinProvider.signMessage(shortMessage, "utf8");
+                signatureStr = typeof signature === 'string' ? signature : JSON.stringify(signature);
+                console.log("[OTC-INTENT] BTC Signature from Xverse/Unisat:", typeof signature);
+                setSuccess("Step 2: ✓ BTC Wallet Signature granted!");
+              } catch (providerError) {
+                const providerMsg = providerError instanceof Error ? providerError.message : String(providerError);
+                throw new Error(
+                  `Bitcoin wallet signature failed: ${providerMsg}\n\n` +
+                  "Please ensure your Bitcoin wallet is open, unlocked, and visible in your browser."
+                );
+              }
+            }
+            
+          } else {
+            // ===== STRK SIGNING WITH STARKNET WALLET =====
+            console.log("[OTC-INTENT] Starting Starknet wallet signing...");
+            const starknet = (window as any).starknet;
+            console.log("[OTC-INTENT] Starknet wallet object:", { hasStarknet: !!starknet, hasAccount: !!starknet?.account, hasSignMessage: !!starknet?.account?.signMessage });
+            
+            if (!starknet) {
+              throw new Error(
+                "❌ Starknet wallet not detected in browser.\n\n" +
+                "✓ Please install one of these extensions:\n" +
+                "  • Argent X: https://chrome.google.com/webstore/detail/argent-x\n" +
+                "  • Braavos: https://chrome.google.com/webstore/detail/braavos\n\n" +
+                "Then refresh this page and try again."
+              );
+            }
+
+            if (!starknet.account) {
+              console.warn("[OTC-INTENT] Starknet wallet detected but not connected. Triggering connection...");
+              try {
+                await starknet.enable?.({ showModal: true });
+              } catch (enableError) {
+                throw new Error("Wallet connection was rejected. Please try again and approve the connection.");
+              }
+            }
+
+            if (!starknet.account) {
+              throw new Error(
+                "Starknet wallet not connected. Please click 'Connect Wallet' first."
+              );
+            }
+
+            // Sign the message with Starknet wallet (using short message to avoid length limits)
+            console.log("[OTC-INTENT] Calling starknet.account.signMessage with message:", shortMessage);
+            try {
+              signature = await starknet.account.signMessage({
+                types: {
+                  StarkNetDomain: [
+                    { name: "name", type: "shortstring" },
+                    { name: "version", type: "shortstring" },
+                    { name: "chainId", type: "shortstring" },
+                  ],
+                  Message: [{ name: "message", type: "string" }],
+                },
+                primaryType: "Message",
+                domain: {
+                  name: "ShadowFlow OTC",
+                  version: "1",
+                  chainId: "SN_SEPOLIA",
+                },
+                message: {
+                  message: shortMessage, // Use shortened message (intent ID only)
+                },
+              });
+              console.log("[OTC-INTENT] STRK Signature received:", typeof signature);
+            } catch (signError) {
+              console.error("[OTC-INTENT] signMessage failed:", signError);
+              throw new Error(
+                `Wallet signature rejected or failed: ${signError instanceof Error ? signError.message : String(signError)}\n\n` +
+                "Please approve the signature request in your wallet popup."
+              );
+            }
+
+            console.log("[OTC-INTENT] STRK Signature from Starknet:", typeof signature);
+            signatureStr = typeof signature === 'string' ? signature : JSON.stringify(signature);
+            setSuccess("Step 2: ✓ Starknet Wallet Signature granted!");
           }
-
-          // Sign the message with wallet (using short message to avoid length limits)
-          signature = await starknet.account.signMessage({
-            types: {
-              StarkNetDomain: [
-                { name: "name", type: "shortstring" },
-                { name: "version", type: "shortstring" },
-                { name: "chainId", type: "shortstring" },
-              ],
-              Message: [{ name: "message", type: "string" }],
-            },
-            primaryType: "Message",
-            domain: {
-              name: "ShadowFlow OTC",
-              version: "1",
-              chainId: "SN_SEPOLIA",
-            },
-            message: {
-              message: shortMessage, // Use shortened message (intent ID only)
-            },
-          });
-
-          console.log("[OTC-INTENT] Signature obtained:", typeof signature);
-          // Convert signature to string if it's not already
-          signatureStr = typeof signature === 'string' ? signature : JSON.stringify(signature);
-          
-          setSuccess("Step 2: ✓ Signature granted!");
         } catch (walletError) {
           const errorMsg = walletError instanceof Error ? walletError.message : String(walletError);
           
@@ -507,10 +594,10 @@ export function OtcIntentPage() {
           
           throw new Error(
             `Wallet signature failed: ${errorMsg}\n\n` +
-            "Make sure:\n" +
-            "1. Starknet wallet (Argent X or Braavos) is installed\n" +
-            "2. Wallet is on SEPOLIA testnet (not mainnet)\n" +
-            "3. Wallet is open and unlocked"
+            `Make sure:\n` +
+            `1. Your ${intent.sendChain === 'btc' ? 'Bitcoin' : 'Starknet'} wallet (${intent.sendChain === 'btc' ? 'Xverse or Unisat' : 'Argent X or Braavos'}) is installed\n` +
+            (intent.sendChain === 'strk' ? `2. Wallet is on SEPOLIA testnet (not mainnet)\n` : ``) +
+            `${intent.sendChain === 'strk' ? '3' : '2'}. Wallet is open and unlocked`
           );
         }
 
