@@ -8,7 +8,7 @@
  */
 
 import { OtcMatchingService } from './otcMatchingService';
-import { RpcProvider, Account } from 'starknet';
+import { RpcProvider, Account, Signer } from 'starknet';
 
 /**
  * Real Cairo contract ABIs for Starknet Sepolia
@@ -130,13 +130,13 @@ export class OtcEscrowService {
     // Initialize executor account (REQUIRED for real execution)
     if (process.env.STARKNET_EXECUTOR_ADDRESS && process.env.STARKNET_EXECUTOR_PRIVATE_KEY) {
       try {
-        // Create account with proper Starknet.js Account constructor
-        // new Account(provider, address, privateKey or keyPair)
-        this.account = new Account(
-          this.rpcProvider,
-          process.env.STARKNET_EXECUTOR_ADDRESS,
-          process.env.STARKNET_EXECUTOR_PRIVATE_KEY
-        );
+        // Create account with proper Starknet.js v9 pattern using Signer
+        const signer = new Signer(process.env.STARKNET_EXECUTOR_PRIVATE_KEY);
+        this.account = new Account({
+          provider: this.rpcProvider,
+          address: process.env.STARKNET_EXECUTOR_ADDRESS,
+          signer,
+        });
         console.log('[OtcEscrow] ✅ Executor account initialized for REAL contract execution');
       } catch (error) {
         console.error('[OtcEscrow] ❌ Failed to initialize executor account:', error);
@@ -222,11 +222,11 @@ export class OtcEscrowService {
         const approvalAmount = BigInt(Math.floor(parseFloat(match.partyB.sendAmount) * 1e18));
         
         console.log(`\n[Step 1] Approving STRK token transfer...`);
-        const approveTx = await this.account.execute({
+        const approveTx = await this.account.execute([{
           contractAddress: this.strkTokenAddress,
           entrypoint: 'approve',
           calldata: [this.escrowContractAddress, approvalAmount.toString(), '0'],
-        });
+        }]);
         
         console.log(`  Approval TX: ${approveTx.transaction_hash}`);
         await this.rpcProvider.waitForTransaction(approveTx.transaction_hash as string);
@@ -253,11 +253,11 @@ export class OtcEscrowService {
         const lockAmount = BigInt(Math.floor(parseFloat(partyASendsStrk ? match.partyA.sendAmount : match.partyB.sendAmount) * 1e18));
 
         console.log(`\n[Step 2] Locking funds in escrow...`);
-        const lockTx = await this.account.execute({
+        const lockTx = await this.account.execute([{
           contractAddress: this.escrowContractAddress,
           entrypoint: 'lock_funds',
           calldata: [intentId, lockAmount.toString(), '0', this.executorAddress],
-        });
+        }]);
         
         console.log(`  Lock TX: ${lockTx.transaction_hash}`);
         await this.rpcProvider.waitForTransaction(lockTx.transaction_hash as string);
@@ -383,11 +383,11 @@ export class OtcEscrowService {
 
       console.log(`  Calling: buy_strk_with_btc(${buyerAddress}, ${btcAmountSats}, ${sellerAddress})`);
 
-      const tx = await this.account.execute({
+      const tx = await this.account.execute([{
         contractAddress: this.buyStrkContractAddress,
         entrypoint: 'buy_strk_with_btc',
         calldata: [buyerAddress, btcAmountSats.toString(), '0', sellerAddress],
-      });
+      }]);
 
       console.log(`[BuyStrk] TX sent: ${tx.transaction_hash}`);
       
@@ -430,11 +430,11 @@ export class OtcEscrowService {
 
       console.log(`  Calling: sell_strk_for_btc(${sellerAddress}, ${strkAmountScaled}, ${buyerAddress}, ${btcAddressFelt})`);
 
-      const tx = await this.account.execute({
+      const tx = await this.account.execute([{
         contractAddress: this.sellStrkContractAddress,
         entrypoint: 'sell_strk_for_btc',
         calldata: [sellerAddress, strkAmountScaled.toString(), '0', buyerAddress, btcAddressFelt],
-      });
+      }]);
 
       console.log(`[SellStrk] TX sent: ${tx.transaction_hash}`);
       
