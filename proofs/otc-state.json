@@ -1,275 +1,263 @@
 {
   "wallets": {
+    "0x02398452a29fd0f4a6fbbb984595dac412a1483e70b9fc59e16ba59b80330c24": {
+      "balances": {
+        "btcBalance": "1.25051240",
+        "strkBalance": "150.00"
+      },
+      "strategies": [
+        {
+          "id": "strategy-1774981000361-344516",
+          "direction": "buy",
+          "status": "matched",
+          "commitment": "0x5b16900f9e18ecaeece0eae9cde0b6cac1bd1e9e075dc2f1ff49c7c7d6eff29",
+          "createdAt": 1774981000360
+        }
+      ],
+      "trades": [
+        {
+          "id": "trade-1774981000361-397524",
+          "direction": "buy",
+          "status": "matched",
+          "createdAt": 1774981000360,
+          "commitment": "0x5b16900f9e18ecaeece0eae9cde0b6cac1bd1e9e075dc2f1ff49c7c7d6eff29",
+          "maskedAmount": "****.****",
+          "maskedPrice": "~$0",
+          "usesTEE": true,
+          "remainingAmount": 0,
+          "matchedAmount": 1000,
+          "counterpartyWallet": "tb1qseller0vffsezm9lqdnkxxy5fgs622wmwk0fghij",
+          "settlementCommitment": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+          "proofHash": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900"
+        }
+      ],
+      "logs": [
+        {
+          "stepIndex": 2,
+          "nodeId": "simple",
+          "action": "CONDITION_CHECK",
+          "maskedAmount": "****.****",
+          "timestamp": 1774981031506,
+          "constraintsSatisfied": true,
+          "witnessGenerated": true
+        },
+        {
+          "stepIndex": 3,
+          "nodeId": "btc_otc_main",
+          "action": "EXECUTE",
+          "maskedAmount": "****.****",
+          "timestamp": 1774981031507,
+          "constraintsSatisfied": true,
+          "witnessGenerated": true
+        },
+        {
+          "stepIndex": 0,
+          "nodeId": "simple",
+          "action": "CONDITION_CHECK",
+          "maskedAmount": "****.****",
+          "timestamp": 1774981000360,
+          "constraintsSatisfied": true,
+          "witnessGenerated": false
+        },
+        {
+          "stepIndex": 1,
+          "nodeId": "btc_otc_main",
+          "action": "EXECUTE",
+          "maskedAmount": "****.****",
+          "timestamp": 1774981000361,
+          "constraintsSatisfied": true,
+          "witnessGenerated": false
+        }
+      ],
+      "matches": [
+        {
+          "id": "match-1774981031509-506870",
+          "buyerWallet": "0x02398452a29FD0f4a6FBbB984595Dac412a1483E70B9FC59E16Ba59B80330c24",
+          "sellerWallet": "tb1qseller0vffsezm9lqdnkxxy5fgs622wmwk0fghij",
+          "buyTradeId": "trade-1774981000361-397524",
+          "sellTradeId": "trade-1774981031505-241475",
+          "amount": 1000,
+          "price": 5.12396e-7,
+          "createdAt": 1774981031506,
+          "settlementCommitment": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+          "proofHash": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+          "buyerConfirmed": false,
+          "sellerConfirmed": false,
+          "status": "matched",
+          "buyerCrossChain": {
+            "sendChain": "strk",
+            "receiveChain": "btc",
+            "receiveWalletAddress": "tb1qjps0vffsezm9lqdnkxxy5fgs622wmwk0mrszvw",
+            "onChainIntentTxHash": "0xtx_intent_17749810004503bbd25e6"
+          },
+          "sellerCrossChain": {
+            "sendChain": "btc",
+            "receiveChain": "strk",
+            "receiveWalletAddress": "0x0731ce505c05b6ebb89e07553c6d2d38ec1d6672dd217e7af4e2f8261fe0274e",
+            "onChainIntentTxHash": "0xtx_intent_1774981031506edab8282"
+          },
+          "buyerEscrowConfirmed": false,
+          "sellerEscrowConfirmed": false
+        }
+      ],
+      "latestAttestation": {
+        "enclaveType": "SGX",
+        "measurementHash": "0x69b0bd5b0b486cdd55136934d10d5d1a4c62107ef1e8972240299bf03390001",
+        "timestamp": 1774981031506,
+        "valid": true
+      },
+      "latestProof": {
+        "proofHash": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+        "commitment": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+        "finalStateHash": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+        "nullifier": "0x5819742acdacf557901578e8206855c2359bec20c0dba2b4c5c3a907db4baa",
+        "merkleRoot": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+        "publicInputs": {
+          "commitment": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+          "finalStateHash": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+          "nullifier": "0x3afd8dbc47e5d077aa1aea533d4045e30032eccad30b55b7adaa572d3f8bc8e",
+          "merkleRoot": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900"
+        },
+        "verified": true,
+        "constraintCount": 3,
+        "proofSize": 1024,
+        "timestamp": 1774981031506,
+        "teeAttested": true
+      }
+    },
+    "tb1qseller0vffsezm9lqdnkxxy5fgs622wmwk0fghij": {
+      "balances": {
+        "btcBalance": "1.2490",
+        "strkBalance": "1250.0000"
+      },
+      "strategies": [
+        {
+          "id": "strategy-1774981031505-503675",
+          "direction": "sell",
+          "status": "matched",
+          "commitment": "0x1cc95f79e13577863c75e175f3f834f8b5ad4bc917354a66e0888f5e6198075",
+          "createdAt": 1774981031504
+        }
+      ],
+      "trades": [
+        {
+          "id": "trade-1774981031505-241475",
+          "direction": "sell",
+          "status": "matched",
+          "createdAt": 1774981031504,
+          "commitment": "0x1cc95f79e13577863c75e175f3f834f8b5ad4bc917354a66e0888f5e6198075",
+          "proofHash": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+          "maskedAmount": "***.****",
+          "maskedPrice": "~$1,952",
+          "usesTEE": true,
+          "remainingAmount": 0.0004876,
+          "matchedAmount": 1000,
+          "counterpartyWallet": "0x02398452a29FD0f4a6FBbB984595Dac412a1483E70B9FC59E16Ba59B80330c24",
+          "settlementCommitment": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900"
+        }
+      ],
+      "logs": [
+        {
+          "stepIndex": 2,
+          "nodeId": "simple",
+          "action": "CONDITION_CHECK",
+          "maskedAmount": "****.****",
+          "timestamp": 1774981031506,
+          "constraintsSatisfied": true,
+          "witnessGenerated": true
+        },
+        {
+          "stepIndex": 3,
+          "nodeId": "btc_otc_main",
+          "action": "EXECUTE",
+          "maskedAmount": "****.****",
+          "timestamp": 1774981031507,
+          "constraintsSatisfied": true,
+          "witnessGenerated": true
+        },
+        {
+          "stepIndex": 0,
+          "nodeId": "simple",
+          "action": "CONDITION_CHECK",
+          "maskedAmount": "***.****",
+          "timestamp": 1774981031504,
+          "constraintsSatisfied": true,
+          "witnessGenerated": false
+        },
+        {
+          "stepIndex": 1,
+          "nodeId": "btc_otc_main",
+          "action": "EXECUTE",
+          "maskedAmount": "***.****",
+          "timestamp": 1774981031505,
+          "constraintsSatisfied": true,
+          "witnessGenerated": false
+        }
+      ],
+      "matches": [
+        {
+          "id": "match-1774981031509-506870",
+          "buyerWallet": "0x02398452a29FD0f4a6FBbB984595Dac412a1483E70B9FC59E16Ba59B80330c24",
+          "sellerWallet": "tb1qseller0vffsezm9lqdnkxxy5fgs622wmwk0fghij",
+          "buyTradeId": "trade-1774981000361-397524",
+          "sellTradeId": "trade-1774981031505-241475",
+          "amount": 1000,
+          "price": 5.12396e-7,
+          "createdAt": 1774981031506,
+          "settlementCommitment": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+          "proofHash": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+          "buyerConfirmed": false,
+          "sellerConfirmed": false,
+          "status": "matched",
+          "buyerCrossChain": {
+            "sendChain": "strk",
+            "receiveChain": "btc",
+            "receiveWalletAddress": "tb1qjps0vffsezm9lqdnkxxy5fgs622wmwk0mrszvw",
+            "onChainIntentTxHash": "0xtx_intent_17749810004503bbd25e6"
+          },
+          "sellerCrossChain": {
+            "sendChain": "btc",
+            "receiveChain": "strk",
+            "receiveWalletAddress": "0x0731ce505c05b6ebb89e07553c6d2d38ec1d6672dd217e7af4e2f8261fe0274e",
+            "onChainIntentTxHash": "0xtx_intent_1774981031506edab8282"
+          },
+          "buyerEscrowConfirmed": false,
+          "sellerEscrowConfirmed": false
+        }
+      ],
+      "latestAttestation": {
+        "enclaveType": "SGX",
+        "measurementHash": "0x69b0bd5b0b486cdd55136934d10d5d1a4c62107ef1e8972240299bf03390001",
+        "timestamp": 1774981031506,
+        "valid": true
+      },
+      "latestProof": {
+        "proofHash": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+        "commitment": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+        "finalStateHash": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+        "nullifier": "0x5819742acdacf557901578e8206855c2359bec20c0dba2b4c5c3a907db4baa",
+        "merkleRoot": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+        "publicInputs": {
+          "commitment": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+          "finalStateHash": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+          "nullifier": "0x3afd8dbc47e5d077aa1aea533d4045e30032eccad30b55b7adaa572d3f8bc8e",
+          "merkleRoot": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900"
+        },
+        "verified": true,
+        "constraintCount": 3,
+        "proofSize": 1024,
+        "timestamp": 1774981031506,
+        "teeAttested": true
+      }
+    },
     "tb1qjps0vffsezm9lqdnkxxy5fgs622wmwk0mrszvw": {
       "balances": {
         "btcBalance": "1.2500",
         "strkBalance": "250.00"
       },
-      "strategies": [
-        {
-          "id": "strategy-1774944968601-328552",
-          "direction": "buy",
-          "status": "open",
-          "commitment": "0x4d805033adf081ef9e6acfa136e9fba1e9c02dedd25231f016f4200d8e7a039",
-          "createdAt": 1774944968599
-        },
-        {
-          "id": "strategy-1774944642410-441512",
-          "direction": "buy",
-          "status": "open",
-          "commitment": "0x60833817d80b81eb1932011aa036f295a9086be08023a1dfc23d68ce24ebc75",
-          "createdAt": 1774944642409
-        },
-        {
-          "id": "strategy-1774941024116-741110",
-          "direction": "buy",
-          "status": "open",
-          "commitment": "0x9e3621ab96833f9288551f28f46982a08bbfb9b1b7beed3e50665c2a50fb4b",
-          "createdAt": 1774941024112
-        },
-        {
-          "id": "strategy-1774940148542-278023",
-          "direction": "buy",
-          "status": "open",
-          "commitment": "0x191a413c846f5a7131b53fe4067fa9853004024be46adb17dedee7900d367fd",
-          "createdAt": 1774940148538
-        },
-        {
-          "id": "strategy-1774939237324-275349",
-          "direction": "buy",
-          "status": "open",
-          "commitment": "0x5b644e92b9b1e7fe31eba926f17ca7cb5ce93fb91fc47f09f28669d11b7691b",
-          "createdAt": 1774939237323
-        },
-        {
-          "id": "strategy-1774938775971-944661",
-          "direction": "buy",
-          "status": "open",
-          "commitment": "0x621102d956a7e2d5eb1679141fd0a8062f4f9a76193a1b3059bfdf3619014d3",
-          "createdAt": 1774938775969
-        },
-        {
-          "id": "strategy-1774933763990-97584",
-          "direction": "buy",
-          "status": "open",
-          "commitment": "0xc845a2c2d428214cfa2fe46a4ecf877ae5ee05665e2433dc290ab2f5428665",
-          "createdAt": 1774933763987
-        }
-      ],
-      "trades": [
-        {
-          "id": "trade-1774944968601-492432",
-          "direction": "buy",
-          "status": "open",
-          "createdAt": 1774944968599,
-          "commitment": "0x4d805033adf081ef9e6acfa136e9fba1e9c02dedd25231f016f4200d8e7a039",
-          "maskedAmount": "***.****",
-          "maskedPrice": "~$197",
-          "usesTEE": true,
-          "remainingAmount": 0.0001,
-          "matchedAmount": 0
-        },
-        {
-          "id": "trade-1774944642411-866758",
-          "direction": "buy",
-          "status": "open",
-          "createdAt": 1774944642409,
-          "commitment": "0x60833817d80b81eb1932011aa036f295a9086be08023a1dfc23d68ce24ebc75",
-          "maskedAmount": "***.****",
-          "maskedPrice": "~$197",
-          "usesTEE": true,
-          "remainingAmount": 0.0001,
-          "matchedAmount": 0
-        },
-        {
-          "id": "trade-1774941024116-125288",
-          "direction": "buy",
-          "status": "open",
-          "createdAt": 1774941024112,
-          "commitment": "0x9e3621ab96833f9288551f28f46982a08bbfb9b1b7beed3e50665c2a50fb4b",
-          "maskedAmount": "***.****",
-          "maskedPrice": "~$197",
-          "usesTEE": true,
-          "remainingAmount": 0.0001,
-          "matchedAmount": 0
-        },
-        {
-          "id": "trade-1774940148542-427173",
-          "direction": "buy",
-          "status": "open",
-          "createdAt": 1774940148538,
-          "commitment": "0x191a413c846f5a7131b53fe4067fa9853004024be46adb17dedee7900d367fd",
-          "maskedAmount": "***.****",
-          "maskedPrice": "~$197",
-          "usesTEE": true,
-          "remainingAmount": 0.0001,
-          "matchedAmount": 0
-        },
-        {
-          "id": "trade-1774939237324-608506",
-          "direction": "buy",
-          "status": "open",
-          "createdAt": 1774939237323,
-          "commitment": "0x5b644e92b9b1e7fe31eba926f17ca7cb5ce93fb91fc47f09f28669d11b7691b",
-          "maskedAmount": "***.****",
-          "maskedPrice": "~$197",
-          "usesTEE": true,
-          "remainingAmount": 0.0001,
-          "matchedAmount": 0
-        },
-        {
-          "id": "trade-1774938775971-49592",
-          "direction": "buy",
-          "status": "open",
-          "createdAt": 1774938775969,
-          "commitment": "0x621102d956a7e2d5eb1679141fd0a8062f4f9a76193a1b3059bfdf3619014d3",
-          "maskedAmount": "***.****",
-          "maskedPrice": "~$197",
-          "usesTEE": true,
-          "remainingAmount": 0.0001,
-          "matchedAmount": 0
-        },
-        {
-          "id": "trade-1774933763990-869669",
-          "direction": "buy",
-          "status": "open",
-          "createdAt": 1774933763987,
-          "commitment": "0xc845a2c2d428214cfa2fe46a4ecf877ae5ee05665e2433dc290ab2f5428665",
-          "maskedAmount": "***.****",
-          "maskedPrice": "~$9,873",
-          "usesTEE": true,
-          "remainingAmount": 0.005,
-          "matchedAmount": 0
-        }
-      ],
-      "logs": [
-        {
-          "stepIndex": 0,
-          "nodeId": "simple",
-          "action": "CONDITION_CHECK",
-          "maskedAmount": "***.****",
-          "timestamp": 1774944968599,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 1,
-          "nodeId": "btc_otc_main",
-          "action": "EXECUTE",
-          "maskedAmount": "***.****",
-          "timestamp": 1774944968600,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 0,
-          "nodeId": "simple",
-          "action": "CONDITION_CHECK",
-          "maskedAmount": "***.****",
-          "timestamp": 1774944642409,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 1,
-          "nodeId": "btc_otc_main",
-          "action": "EXECUTE",
-          "maskedAmount": "***.****",
-          "timestamp": 1774944642410,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 0,
-          "nodeId": "simple",
-          "action": "CONDITION_CHECK",
-          "maskedAmount": "***.****",
-          "timestamp": 1774941024112,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 1,
-          "nodeId": "btc_otc_main",
-          "action": "EXECUTE",
-          "maskedAmount": "***.****",
-          "timestamp": 1774941024113,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 0,
-          "nodeId": "simple",
-          "action": "CONDITION_CHECK",
-          "maskedAmount": "***.****",
-          "timestamp": 1774940148538,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 1,
-          "nodeId": "btc_otc_main",
-          "action": "EXECUTE",
-          "maskedAmount": "***.****",
-          "timestamp": 1774940148539,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 0,
-          "nodeId": "simple",
-          "action": "CONDITION_CHECK",
-          "maskedAmount": "***.****",
-          "timestamp": 1774939237323,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 1,
-          "nodeId": "btc_otc_main",
-          "action": "EXECUTE",
-          "maskedAmount": "***.****",
-          "timestamp": 1774939237324,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 0,
-          "nodeId": "simple",
-          "action": "CONDITION_CHECK",
-          "maskedAmount": "***.****",
-          "timestamp": 1774938775969,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 1,
-          "nodeId": "btc_otc_main",
-          "action": "EXECUTE",
-          "maskedAmount": "***.****",
-          "timestamp": 1774938775970,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 0,
-          "nodeId": "simple",
-          "action": "CONDITION_CHECK",
-          "maskedAmount": "***.****",
-          "timestamp": 1774933763987,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        },
-        {
-          "stepIndex": 1,
-          "nodeId": "ShadowFlow Router V1",
-          "action": "EXECUTE",
-          "maskedAmount": "***.****",
-          "timestamp": 1774933763988,
-          "constraintsSatisfied": true,
-          "witnessGenerated": false
-        }
-      ],
+      "strategies": [],
+      "trades": [],
+      "logs": [],
       "matches": [],
       "latestAttestation": null,
       "latestProof": null
@@ -285,193 +273,61 @@
       "matches": [],
       "latestAttestation": null,
       "latestProof": null
-    },
-    "0x2e7edd678845d856416b4c158a5d02498b20e5739cb0353905d667058bd4afa": {
-      "balances": {
-        "btcBalance": "1.2500",
-        "strkBalance": "250.00"
-      },
-      "strategies": [],
-      "trades": [],
-      "logs": [],
-      "matches": [],
-      "latestAttestation": null,
-      "latestProof": null
-    },
-    "0x2398452a29fd0f4a6fbbb984595dac412a1483e70b9fc59e16ba59b80330c24": {
-      "balances": {
-        "btcBalance": "1.2500",
-        "strkBalance": "250.00"
-      },
-      "strategies": [],
-      "trades": [],
-      "logs": [],
-      "matches": [],
-      "latestAttestation": null,
-      "latestProof": null
-    },
-    "tb1qgra8mxdx7vlxd5exwt9zrrmdyz6kf5x92mnc9w": {
-      "balances": {
-        "btcBalance": "1.2500",
-        "strkBalance": "250.00"
-      },
-      "strategies": [],
-      "trades": [],
-      "logs": [],
-      "matches": [],
-      "latestAttestation": null,
-      "latestProof": null
-    },
-    "tb1qzcrmla8dmdrgzfrawv4297qgyq2q4xrlwrq9tq": {
-      "balances": {
-        "btcBalance": "1.2500",
-        "strkBalance": "250.00"
-      },
-      "strategies": [],
-      "trades": [],
-      "logs": [],
-      "matches": [],
-      "latestAttestation": null,
-      "latestProof": null
     }
   },
   "orderBook": {
-    "buy": [
+    "buy": [],
+    "sell": [
       {
-        "id": "order-1774933763994-135613",
-        "walletAddress": "tb1qjps0vffsezm9lqdnkxxy5fgs622wmwk0mrszvw",
-        "direction": "buy",
-        "templateId": "simple",
-        "selectedPath": "ShadowFlow Router V1",
-        "priceThreshold": 9872.812166055503,
-        "amount": 0.005,
-        "remainingAmount": 0.005,
-        "depositAmount": 0.005,
-        "createdAt": 1774933763987,
-        "commitment": "0xc845a2c2d428214cfa2fe46a4ecf877ae5ee05665e2433dc290ab2f5428665",
-        "strategyId": "strategy-1774933763990-97584",
-        "tradeId": "trade-1774933763990-869669",
-        "sendChain": "btc",
-        "receiveChain": "strk",
-        "receiveWalletAddress": "0x02398452a29FD0f4a6FBbB984595Dac412a1483E70B9FC59E16Ba59B80330c24",
-        "onChainIntentTxHash": "0xtx_intent_1774933763994746adb10"
-      },
-      {
-        "id": "order-1774938776054-210107",
-        "walletAddress": "tb1qjps0vffsezm9lqdnkxxy5fgs622wmwk0mrszvw",
-        "direction": "buy",
+        "id": "order-1774981031506-566764",
+        "walletAddress": "tb1qseller0vffsezm9lqdnkxxy5fgs622wmwk0fghij",
+        "direction": "sell",
         "templateId": "simple",
         "selectedPath": "btc_otc_main",
-        "priceThreshold": 197,
-        "amount": 0.0001,
-        "remainingAmount": 0.0001,
-        "depositAmount": 0.0001,
-        "createdAt": 1774938775969,
-        "commitment": "0x621102d956a7e2d5eb1679141fd0a8062f4f9a76193a1b3059bfdf3619014d3",
-        "strategyId": "strategy-1774938775971-944661",
-        "tradeId": "trade-1774938775971-49592",
+        "priceThreshold": 1951.616603580891,
+        "amount": 0.001,
+        "remainingAmount": 0.0004876,
+        "depositAmount": 0.001,
+        "createdAt": 1774981031504,
+        "commitment": "0x1cc95f79e13577863c75e175f3f834f8b5ad4bc917354a66e0888f5e6198075",
+        "strategyId": "strategy-1774981031505-503675",
+        "tradeId": "trade-1774981031505-241475",
         "sendChain": "btc",
         "receiveChain": "strk",
-        "receiveWalletAddress": "0x02398452a29FD0f4a6FBbB984595Dac412a1483E70B9FC59E16Ba59B80330c24",
-        "onChainIntentTxHash": "0xtx_intent_1774938776055506c4cd2"
-      },
-      {
-        "id": "order-1774939237338-966912",
-        "walletAddress": "tb1qjps0vffsezm9lqdnkxxy5fgs622wmwk0mrszvw",
-        "direction": "buy",
-        "templateId": "simple",
-        "selectedPath": "btc_otc_main",
-        "priceThreshold": 197,
-        "amount": 0.0001,
-        "remainingAmount": 0.0001,
-        "depositAmount": 0.0001,
-        "createdAt": 1774939237323,
-        "commitment": "0x5b644e92b9b1e7fe31eba926f17ca7cb5ce93fb91fc47f09f28669d11b7691b",
-        "strategyId": "strategy-1774939237324-275349",
-        "tradeId": "trade-1774939237324-608506",
-        "sendChain": "btc",
-        "receiveChain": "strk",
-        "receiveWalletAddress": "0x02398452a29FD0f4a6FBbB984595Dac412a1483E70B9FC59E16Ba59B80330c24",
-        "onChainIntentTxHash": "0xtx_intent_1774939237338868d39d5"
-      },
-      {
-        "id": "order-1774940148562-770611",
-        "walletAddress": "tb1qjps0vffsezm9lqdnkxxy5fgs622wmwk0mrszvw",
-        "direction": "buy",
-        "templateId": "simple",
-        "selectedPath": "btc_otc_main",
-        "priceThreshold": 197,
-        "amount": 0.0001,
-        "remainingAmount": 0.0001,
-        "depositAmount": 0.0001,
-        "createdAt": 1774940148538,
-        "commitment": "0x191a413c846f5a7131b53fe4067fa9853004024be46adb17dedee7900d367fd",
-        "strategyId": "strategy-1774940148542-278023",
-        "tradeId": "trade-1774940148542-427173",
-        "sendChain": "btc",
-        "receiveChain": "strk",
-        "receiveWalletAddress": "0x02398452a29FD0f4a6FBbB984595Dac412a1483E70B9FC59E16Ba59B80330c24",
-        "onChainIntentTxHash": "0xtx_intent_1774940148563fe1b46ac"
-      },
-      {
-        "id": "order-1774941024123-100343",
-        "walletAddress": "tb1qjps0vffsezm9lqdnkxxy5fgs622wmwk0mrszvw",
-        "direction": "buy",
-        "templateId": "simple",
-        "selectedPath": "btc_otc_main",
-        "priceThreshold": 197,
-        "amount": 0.0001,
-        "remainingAmount": 0.0001,
-        "depositAmount": 0.0001,
-        "createdAt": 1774941024112,
-        "commitment": "0x9e3621ab96833f9288551f28f46982a08bbfb9b1b7beed3e50665c2a50fb4b",
-        "strategyId": "strategy-1774941024116-741110",
-        "tradeId": "trade-1774941024116-125288",
-        "sendChain": "btc",
-        "receiveChain": "strk",
-        "receiveWalletAddress": "0x02398452a29FD0f4a6FBbB984595Dac412a1483E70B9FC59E16Ba59B80330c24",
-        "onChainIntentTxHash": "0xtx_intent_17749410241252251d637"
-      },
-      {
-        "id": "order-1774944642414-180579",
-        "walletAddress": "tb1qjps0vffsezm9lqdnkxxy5fgs622wmwk0mrszvw",
-        "direction": "buy",
-        "templateId": "simple",
-        "selectedPath": "btc_otc_main",
-        "priceThreshold": 197,
-        "amount": 0.0001,
-        "remainingAmount": 0.0001,
-        "depositAmount": 0.0001,
-        "createdAt": 1774944642409,
-        "commitment": "0x60833817d80b81eb1932011aa036f295a9086be08023a1dfc23d68ce24ebc75",
-        "strategyId": "strategy-1774944642410-441512",
-        "tradeId": "trade-1774944642411-866758",
-        "sendChain": "btc",
-        "receiveChain": "strk",
-        "receiveWalletAddress": "0x02398452a29FD0f4a6FBbB984595Dac412a1483E70B9FC59E16Ba59B80330c24",
-        "onChainIntentTxHash": "0xtx_intent_17749446424157c8ef71e"
-      },
-      {
-        "id": "order-1774944968687-308365",
-        "walletAddress": "tb1qjps0vffsezm9lqdnkxxy5fgs622wmwk0mrszvw",
-        "direction": "buy",
-        "templateId": "simple",
-        "selectedPath": "btc_otc_main",
-        "priceThreshold": 197,
-        "amount": 0.0001,
-        "remainingAmount": 0.0001,
-        "depositAmount": 0.0001,
-        "createdAt": 1774944968599,
-        "commitment": "0x4d805033adf081ef9e6acfa136e9fba1e9c02dedd25231f016f4200d8e7a039",
-        "strategyId": "strategy-1774944968601-328552",
-        "tradeId": "trade-1774944968601-492432",
-        "sendChain": "btc",
-        "receiveChain": "strk",
-        "receiveWalletAddress": "0x02398452a29FD0f4a6FBbB984595Dac412a1483E70B9FC59E16Ba59B80330c24",
-        "onChainIntentTxHash": "0xtx_intent_17749449686871e90285c"
+        "receiveWalletAddress": "0x0731ce505c05b6ebb89e07553c6d2d38ec1d6672dd217e7af4e2f8261fe0274e",
+        "onChainIntentTxHash": "0xtx_intent_1774981031506edab8282"
       }
-    ],
-    "sell": []
+    ]
   },
-  "matches": []
+  "matches": [
+    {
+      "id": "match-1774981031509-506870",
+      "buyerWallet": "0x02398452a29FD0f4a6FBbB984595Dac412a1483E70B9FC59E16Ba59B80330c24",
+      "sellerWallet": "tb1qseller0vffsezm9lqdnkxxy5fgs622wmwk0fghij",
+      "buyTradeId": "trade-1774981000361-397524",
+      "sellTradeId": "trade-1774981031505-241475",
+      "amount": 1000,
+      "price": 5.12396e-7,
+      "createdAt": 1774981031506,
+      "settlementCommitment": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+      "proofHash": "0x7d05cba6318419cff0c0042da660985fadc6dfa05e4c1488779a5d3bd869900",
+      "buyerConfirmed": false,
+      "sellerConfirmed": false,
+      "status": "matched",
+      "buyerCrossChain": {
+        "sendChain": "strk",
+        "receiveChain": "btc",
+        "receiveWalletAddress": "tb1qjps0vffsezm9lqdnkxxy5fgs622wmwk0mrszvw",
+        "onChainIntentTxHash": "0xtx_intent_17749810004503bbd25e6"
+      },
+      "sellerCrossChain": {
+        "sendChain": "btc",
+        "receiveChain": "strk",
+        "receiveWalletAddress": "0x0731ce505c05b6ebb89e07553c6d2d38ec1d6672dd217e7af4e2f8261fe0274e",
+        "onChainIntentTxHash": "0xtx_intent_1774981031506edab8282"
+      },
+      "buyerEscrowConfirmed": false,
+      "sellerEscrowConfirmed": false
+    }
+  ]
 }

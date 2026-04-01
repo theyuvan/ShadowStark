@@ -11,20 +11,23 @@ const BASE_URL = (() => {
   const url = process.env.NEXT_PUBLIC_BTC_RPC_URL || "https://mempool.space/testnet4/api";
   // Validate it starts with https:// or http://
   if (url && (url.startsWith("https://") || url.startsWith("http://"))) {
-    return url;
+    // Ensure no trailing slash
+    return url.replace(/\/$/, "");
   }
   return "https://mempool.space/testnet4/api";
 })();
 
+console.log(`[btcClient] BASE_URL initialized: ${BASE_URL}`);
+
 const EXPLORER_URL =
-  process.env.NEXT_PUBLIC_BTC_EXPLORER_URL ?? "https://mempool.space/testnet4";
+  (process.env.NEXT_PUBLIC_BTC_EXPLORER_URL ?? "https://mempool.space/testnet4").replace(/\/$/, "");
 
 // Fallback sources for BTC balance queries
 const FALLBACK_SOURCES = [
   "https://mempool.space/testnet4/api",
   "https://blockstream.info/testnet4/api",
-  // Note: blockchain.info doesn't provide testnet4, but we keep it as a reference
 ];
+
 
 export interface BtcUtxo {
   txid: string;
@@ -68,8 +71,16 @@ function satsToBtc(sats: number): string {
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   // Validate path
-  if (!path || typeof path !== "string" || !path.startsWith("/")) {
-    throw new Error(`Invalid API path: ${path}`);
+  if (!path || typeof path !== "string") {
+    throw new Error(`[btcClient] Invalid API path: ${path}`);
+  }
+  if (!path.startsWith("/")) {
+    throw new Error(`[btcClient] API path must start with /: ${path}`);
+  }
+
+  // Check BASE_URL is valid
+  if (!BASE_URL || !BASE_URL.startsWith("http")) {
+    throw new Error(`[btcClient] Invalid BASE_URL: ${BASE_URL}`);
   }
 
   const url = `${BASE_URL}${path}`;
@@ -78,32 +89,39 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     new URL(url);
   } catch (err) {
-    console.error(`[btcClient] Invalid URL constructed: ${url}, BASE_URL=${BASE_URL}, path=${path}`);
+    console.error(`[btcClient] Invalid URL constructed: ${url}`);
+    console.error(`[btcClient] Details - BASE_URL=${BASE_URL}, path=${path}`);
     throw new Error(`Invalid URL: ${url}`);
   }
 
   try {
+    console.log(`[btcClient] Fetching ${url}...`);
     const res = await fetch(url, {
       ...init,
       headers: {
         Accept: "application/json",
+        "User-Agent": "ShadowFlow BTC OTC Client",
         ...init?.headers,
       },
     });
 
     if (!res.ok) {
       const text = await res.text().catch(() => res.statusText);
-      throw new Error(`BTC API error ${res.status} at ${url}: ${text}`);
+      console.error(`[btcClient] HTTP ${res.status} at ${url}`);
+      console.error(`[btcClient] Response: ${text.slice(0, 200)}`);
+      throw new Error(`BTC API error ${res.status}: ${text}`);
     }
 
     // /tx broadcast returns plain text txid
     const contentType = res.headers.get("content-type") ?? "";
-    if (contentType.includes("application/json")) {
-      return res.json() as Promise<T>;
-    }
-    return res.text() as unknown as T;
+    const result = contentType.includes("application/json")
+      ? await res.json()
+      : await res.text();
+    
+    console.log(`[btcClient] ✅ Successfully fetched from ${url}`);
+    return result as T;
   } catch (err) {
-    console.error(`[btcClient] Failed to fetch from ${url}:`, err);
+    console.error(`[btcClient] Failed to fetch ${url}:`, err);
     throw err;
   }
 }
@@ -113,47 +131,58 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
  * Useful when primary API is down
  */
 async function apiFetchWithFallback<T>(path: string, init?: RequestInit, sources?: string[]): Promise<T> {
-  const sourcesToTry = sources || [BASE_URL, ...FALLBACK_SOURCES];
+  const sourcesToTry = sources || [BASE_URL, ...FALLBACK_SOURCES.filter(s => s !== BASE_URL)];
   const errors: string[] = [];
 
-  for (const source of sourcesToTry) {
+  console.log(`[btcClient] Trying fallback sources for ${path}:`, sourcesToTry);
+
+  for (let idx = 0; idx < sourcesToTry.length; idx++) {
+    const source = sourcesToTry[idx];
     try {
       if (!source || typeof source !== "string" || !source.startsWith("http")) {
-        errors.push(`Invalid source URL: ${source}`);
+        errors.push(`Source ${idx}: Invalid URL format - ${source}`);
+        console.warn(`[btcClient] Skipping invalid source ${idx}: ${source}`);
         continue;
       }
 
       const url = `${source}${path}`;
+      console.log(`[btcClient] Trying source ${idx + 1}/${sourcesToTry.length}: ${url}`);
+      
       const res = await fetch(url, {
         ...init,
         headers: {
           Accept: "application/json",
+          "User-Agent": "ShadowFlow BTC OTC Client",
           ...init?.headers,
         },
       });
 
       if (!res.ok) {
         const text = await res.text().catch(() => res.statusText);
-        errors.push(`${source}: HTTP ${res.status}`);
+        errors.push(`Source ${idx}: HTTP ${res.status}`);
+        console.warn(`[btcClient] Source ${idx} returned ${res.status}`);
         continue;
       }
 
       const contentType = res.headers.get("content-type") ?? "";
-      if (contentType.includes("application/json")) {
-        console.log(`[btcClient] Successfully fetched from ${source}`);
-        return res.json() as Promise<T>;
-      }
-      return res.text() as unknown as T;
+      const result = contentType.includes("application/json")
+        ? await res.json()
+        : await res.text();
+        
+      console.log(`[btcClient] ✅ Successfully fetched from source ${idx}: ${source}`);
+      return result as T;
     } catch (err) {
-      errors.push(`${source}: ${err instanceof Error ? err.message : String(err)}`);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      errors.push(`Source ${idx}: ${errMsg}`);
+      console.warn(`[btcClient] Source ${idx} failed: ${errMsg}`);
       continue;
     }
   }
 
   // All sources failed
-  throw new Error(
-    `[btcClient] Failed to fetch ${path} from all sources:\n${errors.join("\n")}`
-  );
+  const errorMsg = `[btcClient] Failed to fetch ${path} from all ${sourcesToTry.length} sources:\n${errors.map((e, i) => `  ${i}: ${e}`).join("\n")}`;
+  console.error(errorMsg);
+  throw new Error(errorMsg);
 }
 
 class BtcClient {
@@ -163,18 +192,30 @@ class BtcClient {
    * Falls back to external sources if primary API fails.
    */
   async getBalance(address: string): Promise<BtcBalance> {
+    // Validate address
+    if (!address || typeof address !== "string" || address.trim() === "") {
+      console.error(`[btcClient] Invalid address provided: ${address}`);
+      throw new Error("Invalid Bitcoin address");
+    }
+
+    const trimmedAddr = address.trim();
+    console.log(`[btcClient] Fetching balance for address: ${trimmedAddr.slice(0, 20)}...`);
+
     let stats: BtcAddressStats;
     
     try {
       // Try primary source first
-      stats = await apiFetch<BtcAddressStats>(`/address/${address}`);
+      stats = await apiFetch<BtcAddressStats>(`/address/${trimmedAddr}`);
+      console.log(`[btcClient] ✅ Got balance from primary source`);
     } catch (primaryErr) {
-      console.warn(`[btcClient] Primary source failed, trying fallback sources:`, primaryErr);
+      console.warn(`[btcClient] Primary source failed: ${primaryErr}`);
+      console.log(`[btcClient] Trying fallback sources...`);
+      
       // Fall back to trying multiple sources
       try {
-        stats = await apiFetchWithFallback<BtcAddressStats>(`/address/${address}`);
+        stats = await apiFetchWithFallback<BtcAddressStats>(`/address/${trimmedAddr}`);
       } catch (fallbackErr) {
-        console.error(`[btcClient] All sources failed for balance fetch:`, fallbackErr);
+        console.error(`[btcClient] All sources failed to get balance: ${fallbackErr}`);
         // Return default zero balance if all sources fail
         return {
           confirmed: 0,
@@ -184,18 +225,31 @@ class BtcClient {
       }
     }
 
-    const confirmedFunded = stats.chain_stats.funded_txo_sum;
-    const confirmedSpent = stats.chain_stats.spent_txo_sum;
-    const confirmed = confirmedFunded - confirmedSpent;
+    // Validate response structure
+    if (!stats || !stats.chain_stats || !stats.mempool_stats) {
+      console.error(`[btcClient] Invalid response structure from API:`, stats);
+      return {
+        confirmed: 0,
+        unconfirmed: 0,
+        totalBtc: "0.00000000",
+      };
+    }
 
-    const mempoolFunded = stats.mempool_stats.funded_txo_sum;
-    const mempoolSpent = stats.mempool_stats.spent_txo_sum;
-    const unconfirmed = mempoolFunded - mempoolSpent;
+    const confirmedFunded = stats.chain_stats.funded_txo_sum ?? 0;
+    const confirmedSpent = stats.chain_stats.spent_txo_sum ?? 0;
+    const confirmed = Math.max(0, confirmedFunded - confirmedSpent);
+
+    const mempoolFunded = stats.mempool_stats.funded_txo_sum ?? 0;
+    const mempoolSpent = stats.mempool_stats.spent_txo_sum ?? 0;
+    const unconfirmed = Math.max(0, mempoolFunded - mempoolSpent);
+
+    const totalBtc = satsToBtc(confirmed + unconfirmed);
+    console.log(`[btcClient] Balance for ${trimmedAddr.slice(0, 20)}...: confirmed=${confirmed}, unconfirmed=${unconfirmed}, total=${totalBtc}`);
 
     return {
       confirmed,
       unconfirmed,
-      totalBtc: satsToBtc(Math.max(0, confirmed + unconfirmed)),
+      totalBtc,
     };
   }
 

@@ -144,30 +144,37 @@ export function ConnectWallet() {
       }
 
       const btcAddr = accounts.paymentAddress;
+      console.log(`[ConnectWallet] ✅ Xverse connected: ${btcAddr.slice(0, 20)}...`);
       setBtcAddress(btcAddr);
       setBtcConnected(true);
 
+      // Fetch balance from Mempool with detailed logging
       try {
+        console.log(`[ConnectWallet] Fetching BTC balance from Mempool for ${btcAddr.slice(0, 20)}...`);
         const bal = await btcClient.getBalance(btcAddr);
+        console.log(`[ConnectWallet] ✅ Balance fetched: ${bal.totalBtc} BTC`);
         setBtcAddress(btcAddr, bal.totalBtc);
       } catch (balErr) {
-        console.warn("Mempool balance fetch failed:", balErr);
+        console.error(`[ConnectWallet] ❌ Mempool balance fetch failed: ${balErr}`);
+        console.log(`[ConnectWallet] Setting balance to 0.00000000 (fallback)`);
         setBtcAddress(btcAddr, "0.00000000");
       }
 
       // Also refresh Starknet balances if already connected
       if (address) {
         try {
+          console.log(`[ConnectWallet] Fetching Starknet balances...`);
           const balances = await fetchAllBalances(address, btcAddr);
           setBalances(balances.btc, balances.strk, balances.eth);
+          console.log(`[ConnectWallet] ✅ Starknet balances fetched`);
         } catch (starkErr) {
-          console.warn("Starknet balance fetch failed:", starkErr);
+          console.warn(`[ConnectWallet] ⚠️ Starknet balance fetch failed: ${starkErr}`);
         }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Xverse connection failed.";
       setXverseError(msg);
-      console.error("[ConnectWallet] Xverse connect failed:", err);
+      console.error("[ConnectWallet] ❌ Xverse connect failed:", err);
     } finally {
       setXverseConnecting(false);
     }

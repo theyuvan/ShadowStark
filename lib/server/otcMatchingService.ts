@@ -141,6 +141,8 @@ export class OtcMatchingService {
           sendChain: match.partyA.sendChain,
           receiveAmount: match.partyA.receiveAmount,
           receiveChain: match.partyA.receiveChain,
+          signed: false,
+          fundedToEscrow: false,
         },
         partyB: {
           wallet: match.partyB.wallet,
@@ -148,6 +150,8 @@ export class OtcMatchingService {
           sendChain: match.partyB.sendChain,
           receiveAmount: match.partyB.receiveAmount,
           receiveChain: match.partyB.receiveChain,
+          signed: false,
+          fundedToEscrow: false,
         },
         status: 'pending',
       };
@@ -378,6 +382,19 @@ export class OtcMatchingService {
       return false;
     }
     intent.signature = signature;
+    
+    // Find all matches this intent is part of and update party signed status
+    for (const match of this.matches.values()) {
+      if (match.intentA === intentId) {
+        match.partyA.signed = true;
+        console.log(`[OTC-Match] Updated match ${match.matchId} - partyA signed`);
+      }
+      if (match.intentB === intentId) {
+        match.partyB.signed = true;
+        console.log(`[OTC-Match] Updated match ${match.matchId} - partyB signed`);
+      }
+    }
+    
     return true;
   }
 

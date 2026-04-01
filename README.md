@@ -1,207 +1,187 @@
-﻿# ShadowFlowBTC++
+﻿# ShadowFlow BTC
 
-Zero-knowledge private Bitcoin strategy execution on Starknet.
+ShadowFlow is a cross-chain OTC swap system for BTC <-> STRK with privacy-focused verification.
 
-## Architecture
+It combines:
+- intent-based matching,
+- ZK proofs (Garaga-based prover pipeline),
+- Starknet smart contracts for verification/state,
+- escrow-style settlement flow,
+- optional TEE attestation (SGX/Nitro model in types, SGX-focused in implementation).
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                USER INTERFACE                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Builder: app/builder/page.tsx                                              │
-│   ├─ ZKFlowBuilder                                                         │
-│   │   ├─ NodeToolbar (ZK cost estimator)                                   │
-│   │   ├─ ReactFlow canvas + custom nodes                                   │
-│   │   ├─ NodeConfigPanel (PRIVATE fields redacted)                         │
-│   │   └─ ZKConstraintPreview                                               │
-│   └─ CompileButton                                                         │
-│                                                                             │
-│ Simulator: app/simulate/page.tsx                                           │
-│   └─ ExecutionVisualizer pipeline                                            │
-│                                                                             │
-│ Dashboard: app/dashboard/page.tsx                                          │
-│   └─ CommitmentCard / ProofStatusCard / StarknetStatus / ExecutionTimeline │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           CLIENT ZK ORCHESTRATION                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ hooks/useStrategyCompiler.ts                                                │
-│ hooks/useZKProver.ts                                                        │
-│ hooks/useMerkleTree.ts                                                      │
-│ hooks/useNullifier.ts                                                       │
-│ hooks/useStarknet.ts                                                        │
-│                                                                             │
-│ Stores (Zustand):                                                           │
-│   strategyStore / proofStore / executionStore / zkStore                     │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              ZK CORE LIBRARIES                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ lib/zk/merkleTree.ts      -> Poseidon Merkle tree (depth 20)               │
-│ lib/zk/rangeProof.ts      -> Range witness generation + verify              │
-│ lib/zk/nullifier.ts       -> Nullifier + replay protection                  │
-│ lib/zk/zkProver.ts        -> End-to-end proof pipeline                      │
-│ lib/zk/proofAggregator.ts -> Proof aggregation stubs                        │
-│                                                                             │
-│ Hashing: @scure/starknet (poseidonHash)                                     │
-│ Verifier integration stub: @garaga/starknet                                 │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            STARKNET / CAIRO LAYER                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ contracts/ShadowFlow.cairo                                                  │
-│   ├─ store_commitment                                                       │
-│   ├─ verify_and_store                                                       │
-│   ├─ is_nullifier_spent                                                     │
-│   └─ get_merkle_root                                                        │
-│                                                                             │
-│ contracts/GaragaVerifier.cairo                                              │
-│   └─ verify(proof_hash, public_inputs_hash)                                 │
-│                                                                             │
-│ contracts/circuits/strategy_execution.cairo                                 │
-│   └─ range / commitment / transition / merkle / nullifier constraints       │
-└─────────────────────────────────────────────────────────────────────────────┘
+This README is the high-level version you can share with a friend.
 
-## Privacy Rules
+## What The Project Does
 
-- Marked `// PRIVATE — never log or transmit`:
-  - secret keys
-  - private witnesses
-  - trade amounts
-  - price bounds
-  - merkle paths
-- Only public outputs are exposed:
-  - commitment
-  - nullifier
-  - merkle root
-  - final state hash
+Two users can coordinate an atomic-style OTC swap:
+- User A: sends BTC, receives STRK
+- User B: sends STRK, receives BTC
 
-## Development
+Before settlement, the system validates:
+- wallet ownership and signatures,
+- price sanity vs oracle data,
+- cryptographic commitments and nullifiers,
+- match integrity,
+- optional trusted-execution attestation.
 
-- Install: `npm install`
-- Lint: `npm run lint`
-- Build: `npm run build`
-- Dev server: `npm run dev`
-- Deploy contracts (requires Scarb + sncast configured): `npm run deploy:starknet`
+## End-To-End Flow
 
-## Environment Setup
+1. Create intent
+- User submits swap intent (`sendChain`, `receiveChain`, amount, destination wallet).
+- Backend validates chain-specific addresses (BTC bech32 / Starknet hex).
+- System generates a commitment and intent hash.
 
-1. Copy `.env.example` to `.env.local`
-2. Fill at minimum:
-  - `NEXT_PUBLIC_STARKNET_NETWORK=sepolia`
-  - `NEXT_PUBLIC_STARKNET_RPC_URL=https://starknet-sepolia.public.blastapi.io/rpc/v0_8`
-  - `NEXT_PUBLIC_EXECUTION_API_URL`
-    - `STARKNET_EXECUTOR_ADDRESS` and `STARKNET_EXECUTOR_PRIVATE_KEY`
-  - `NEXT_PUBLIC_ENABLE_REAL_EXECUTION=true` (for real mode)
-  - `NEXT_PUBLIC_STARKSCAN_TX_BASE_URL=https://sepolia.starkscan.co/tx`
+2. Match intents
+- Matching engine pairs opposite intents (BTC->STRK with STRK->BTC).
+- Settlement commitment and nullifier are generated.
 
-When real mode is enabled, the app no longer relies on mock trade data. Wallet
-connection, BUY/SELL intent submission, commitment storage, proof verification,
-and proof links are expected to come from your execution API + deployed contracts.
+3. Generate and verify ZK proof
+- Proof is generated by Garaga prover services (Poseidon + Merkle + nullifier logic).
+- Local cryptographic verification is performed.
+- On-chain verification is attempted against Garaga verifier contract on Starknet Sepolia.
 
-Expected execution API endpoints:
+4. User signs
+- User signs the intent payload/message to prove wallet ownership and consent.
 
-- `POST /otc/intents`
-- `GET /otc/strategies?walletAddress=...`
-- `GET /otc/trades?walletAddress=...`
-- `GET /otc/execution-logs?walletAddress=...`
-- `GET /otc/proofs/latest?walletAddress=...`
-- `GET /tee/attestations/latest?walletAddress=...`
-- `GET /wallet/balances?walletAddress=...`
-- `POST /commitment/store`
-- `POST /proof/verify-and-store`
-- `POST /proof/register-valid`
-- `GET /nullifier/spent?nullifier=...`
-- `GET /chain/state`
+5. Escrow and execution
+- Funds are escrow-locked per side.
+- Once both sides are funded/approved, swap execution is triggered.
+- Execution path uses Starknet contracts for settlement steps and tracking.
 
-When `NEXT_PUBLIC_EXECUTION_API_URL=http://localhost:3000/api`, these are served by Next API routes in this repository.
+6. Finalize and audit
+- Transaction hash(es), proof references, and lifecycle state are returned.
+- Nullifier tracking prevents replay/double settlement.
 
-## External ZK Circuit Compilation (`C:\zk-affordability-loan`)
+## Where Starknet Is Used
 
-Detected scripts in that project:
+Starknet is the execution and verification backbone:
+- Cairo contracts for verifier and strategy state handling.
+- Contract calls for proof checks, nullifier spend checks, commitments, and swap-side operations.
+- Sepolia network is used throughout development/integration.
 
-- ZK build script: `scripts/build_zk.sh`
-- Deploy script: `scripts/deploy_all.sh`
+Key files:
+- `contracts/src/garaga_verifier.cairo`
+- `contracts/src/shadowflow.cairo`
+- `lib/starknetClient.ts`
+- `lib/server/otcEscrowService.ts`
 
-Typical flow:
+## Where Garaga Is Used
+
+Garaga integration is central to proof handling:
+- `lib/server/garagaProver.ts`: generates proof objects using cryptographic primitives.
+- `lib/server/garagaOnChainVerifier.ts`: local + on-chain verification flow.
+- `lib/server/zkProofService.ts`: orchestrates proof generation for intent validation.
+
+Current verifier contract behavior in this repo:
+- `GaragaVerifier.cairo` validates proof/public-input pairs via allow-list maps.
+- Production-hardening path is to replace/extend this with full cryptographic verifier semantics on-chain.
+
+## Where TEE Is Used
+
+TEE support is included to attest secure execution context:
+- `lib/tee/teeClient.ts` fetches attestation from execution API.
+- `ZKProof` and lifecycle structures carry `teeAttested` / attestation fields.
+- `lib/server/otcEscrowService.ts` supports TEE-protected execution flow and attaches attestation metadata.
+
+TEE model in code:
+- Interface supports `SGX` or `Nitro`.
+- Most implementation/docs currently emphasize SGX-style measurement hashes.
+
+## Architecture Summary
+
+- Frontend (Next.js App Router):
+  - intent forms, swap waiting/matching UI, execution status, docs/dashboard pages.
+- API routes:
+  - intent validation/execution,
+  - escrow funding/confirmation,
+  - TEE attestation retrieval,
+  - settlement and lifecycle reads.
+- Server services:
+  - matching engine,
+  - state store,
+  - cross-chain routing helpers,
+  - Garaga proof generation + verification,
+  - Starknet transaction execution.
+- Contracts (Cairo):
+  - verifier and ShadowFlow state contract.
+
+## Quick Start
 
 1. Install dependencies
-  - `npm run install:all`
-2. Build circuits
-  - Windows (verified): `powershell -ExecutionPolicy Bypass -File .\\scripts\\build_zk_circuit.ps1`
-  - Bash: `npm run build:circuits`
-3. Configure backend env (`backend/.env`)
-4. Deploy contracts
-  - `npm run deploy:starknet`
+```bash
+npm install
+```
 
-After build, expected artifacts:
+2. Configure environment
+- Copy env template to `.env.local` (or create manually).
+- Set at least:
+  - `NEXT_PUBLIC_STARKNET_NETWORK=sepolia`
+  - `NEXT_PUBLIC_STARKNET_RPC_URL=<your_sepolia_rpc>`
+  - `NEXT_PUBLIC_GARAGA_VERIFIER_ADDRESS=<deployed_verifier>`
+  - `NEXT_PUBLIC_SHADOWFLOW_CONTRACT_ADDRESS=<deployed_shadowflow>`
+  - `STARKNET_EXECUTOR_ADDRESS=<executor_account>`
+  - `STARKNET_EXECUTOR_PRIVATE_KEY=<executor_private_key>`
+  - `NEXT_PUBLIC_EXECUTION_API_URL=<api_base_url>`
 
-- `contracts/zk/build/activityVerifier.wasm`
-- `contracts/zk/build/activityVerifier_final.zkey`
-- `contracts/zk/build/verification_key.json`
-- `backend/src/zk/activityVerifier.wasm`
-- `backend/src/zk/activityVerifier_final.zkey`
-- `backend/src/zk/verification_key.json`
+3. Run app
+```bash
+npm run dev
+```
 
-This repository can integrate with that pipeline through `NEXT_PUBLIC_EXECUTION_API_URL`.
+4. Optional quality checks
+```bash
+npm run lint
+npm run build
+```
 
-## Notes
+## APIs You Will Touch Most
 
-This implementation is architecturally correct for a ZK pipeline with clear separation
-between public inputs and private witness data. Circuit proof generation and verification
-are represented with safe stubs where full prover/verifier backend integration is pending.
+- `POST /api/otc/intents` (`step=validate` then `step=execute`)
+- `POST /api/otc/escrow/fund`
+- `POST /api/otc/escrow/confirm`
+- `POST /api/otc/matches/settle`
+- `GET /api/tee/attestations/latest?walletAddress=...`
 
-## Step 15: Cairo Contract Review
+## Deployment Notes
 
-Contracts reviewed:
+For Cairo contracts and Starknet deployment flow, see:
+- `contracts/DEPLOYMENT_GUIDE.md`
 
-- `contracts/ShadowFlow.cairo`
-- `contracts/GaragaVerifier.cairo`
-- `contracts/circuits/strategy_execution.cairo`
+Known deployed Sepolia addresses (from project docs):
+- GaragaVerifier: `0x024e93e27078a286b18da6061c201359aaf0412f0c4a0c0b47857630b124c540`
+- ShadowFlow: `0x025fd71c54591552045d4077bee03914b0a2615e1f772e51af1b0e3aaee5f66a`
 
-Findings:
+## Security Model (High Level)
 
-- `ShadowFlow.cairo` correctly stores commitments, tracks nullifier spend state, and gates state writes on verifier response.
-- `GaragaVerifier.cairo` is currently a stub verifier using allow-list logic (`allowed_proofs`) rather than cryptographic proof verification.
-- `strategy_execution.cairo` is a placeholder constraint model using arithmetic assertions to represent commitment, range, transition, Merkle, and nullifier checks.
+- Commitments hide trade details while preserving verifiability.
+- Nullifiers prevent replay/double-use of settlement state.
+- On-chain checks anchor settlement conditions to Starknet state.
+- Optional TEE attestation adds trusted-execution evidence.
+- User signatures gate intent execution and wallet ownership.
 
-Implication:
+## Current State vs Production-Grade Target
 
-- The contract layer is structurally aligned with the app flow, but production security requires replacing both verifier and circuit placeholders with real proving-system integration.
+Current repository state:
+- Strong flow coverage end-to-end (intent -> proof -> escrow -> execute).
+- Real cryptographic primitives in prover path.
+- On-chain verification integration path active in backend services.
+- Verifier contract pattern currently map/allow-list based.
 
-## Contract Compile + Address Export
+Production hardening priorities:
+- full cryptographic verifier semantics on-chain,
+- final audited escrow contracts for both sides,
+- complete nullifier registry guarantees on-chain,
+- operational monitoring + retries + incident tooling.
 
-Deployment workflow script:
+## Core Directories
 
-- `scripts/compile-and-deploy-starknet.ps1`
+- `app/`: Next.js pages/routes
+- `components/`: UI and flow components
+- `lib/server/`: matching, escrow, Garaga, Starknet services
+- `lib/tee/`: TEE client integration
+- `contracts/src/`: Cairo contracts
+- `proofs/`: local state/proof artifacts for MVP flow
 
-What it does:
+## One-Line Pitch
 
-1. Builds Cairo contracts with `scarb build`
-2. Declares + deploys `GaragaVerifier`
-3. Declares + deploys `ShadowFlow` with constructor calldata
-4. Saves deployed addresses to `contracts/deployment/deployed-addresses.json`
-
-Then copy addresses into `.env.local`:
-
-- `NEXT_PUBLIC_GARAGA_VERIFIER_ADDRESS`
-- `NEXT_PUBLIC_SHADOWFLOW_CONTRACT_ADDRESS`
-
-## Online Documentation Verification (Starknet + Bitcoin)
-
-The current app assumptions were cross-checked against online docs:
-
-- Starknet docs (`docs.starknet.io`) quickstart explicitly includes deployment/interactions on Starknet Sepolia.
-- Starknet docs confirm modern toolchain expectations (Scarb, Starknet Foundry, Devnet), including Windows guidance via WSL.
-- Bitcoin developer docs (`developer.bitcoin.org`) confirm UTXO-based transaction model, txid/vout input references, and standard script validation flow.
-- Bitcoin docs reinforce that transaction outputs become UTXOs until spent and that signatures authorize spending conditions, matching the app’s commitment/execution mental model.
-
-Scope note:
-
-- This project does not execute native Bitcoin transactions directly; BTC strategy semantics are represented in the private strategy/ZK pipeline and verified on Starknet.
+ShadowFlow is a Starknet-powered, privacy-aware OTC swap engine that combines Garaga-based ZK proofs, escrowed execution, and optional TEE attestation to make BTC<->STRK settlement safer and more verifiable.

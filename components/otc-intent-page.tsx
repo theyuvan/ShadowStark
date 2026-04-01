@@ -469,24 +469,43 @@ export function OtcIntentPage() {
                   message: shortMessage,
                 });
                 
+                console.log("[OTC-INTENT] sats-connect response:", response);
+                
                 // Handle sats-connect response
-                const status = (response as { status?: string }).status;
-                if (status === 'success' && (response as any).result?.signature) {
-                  signature = (response as any).result.signature;
+                const status = (response as any)?.status;
+                const sig = (response as any)?.result?.signature || (response as any)?.signature;
+                
+                if (status === 'success' && sig) {
+                  signature = sig;
                   signatureStr = typeof signature === 'string' ? signature : JSON.stringify(signature);
                   console.log("[OTC-INTENT] BTC Signature from sats-connect:", typeof signature);
                   setSuccess("Step 2: ✓ BTC Wallet Signature granted!");
+                } else if (!sig && !status) {
+                  // Try treating response as signature directly
+                  if (typeof response === 'string' && response.length > 10) {
+                    signature = response;
+                    signatureStr = signature;
+                    console.log("[OTC-INTENT] BTC Signature from sats-connect (direct):", typeof signature);
+                    setSuccess("Step 2: ✓ BTC Wallet Signature granted!");
+                  } else {
+                    const msg = typeof response === 'string' ? response : JSON.stringify(response);
+                    throw new Error(`sats-connect signing returned invalid response: ${msg}`);
+                  }
                 } else {
-                  throw new Error("sats-connect signing failed");
+                  const msg = typeof response === 'string' ? response : JSON.stringify(response);
+                  throw new Error(`sats-connect signing failed: ${msg}`);
                 }
               } catch (satsError) {
                 // sats-connect failed, fall back to direct provider access
+                const satsMsg = satsError instanceof Error ? satsError.message : String(satsError);
+                console.warn("[OTC-INTENT] sats-connect failed:", satsMsg);
                 throw new Error(
-                  "Bitcoin wallet not connected. Please ensure:\n" +
+                  `Bitcoin signing failed: ${satsMsg}\n\n` +
+                  "Please ensure:\n" +
                   "1. Xverse or Unisat wallet extension is installed\n" +
                   "2. Wallet is open, unlocked, and visible in your browser toolbar\n" +
-                  "3. You have approved the wallet connection\n\n" +
-                  "If problem continues, refresh the page and reconnect your wallet."
+                  "3. You have approved the wallet connection\n" +
+                  "4. Pop-up wasn't blocked by your browser"
                 );
               }
             } else {
@@ -1000,7 +1019,8 @@ export function OtcIntentPage() {
                         <input
                           type="number"
                           min="0"
-                          step={intent.sendChain === "btc" ? "0.0001" : "0.01"}
+                          step="any"
+                          inputMode="decimal"
                           value={intent.amount}
                           onChange={(event) => {
                             const val = event.target.value;
@@ -1064,7 +1084,8 @@ export function OtcIntentPage() {
                   <input
                     type="number"
                     min="0"
-                    step="0.0001"
+                    step="any"
+                    inputMode="decimal"
                     value={intent.depositAmount}
                     onChange={(event) => setIntent((prev) => ({ ...prev, depositAmount: event.target.value }))}
                     className="mt-1 w-full rounded-xl border-2 border-black px-3 py-2"
