@@ -11,9 +11,49 @@ export async function GET(request: Request) {
     ensureApiKeyIfConfigured(request);
     const { searchParams } = new URL(request.url);
     const walletAddress = searchParams.get("walletAddress");
+    const matchId = searchParams.get("matchId");
     const view = searchParams.get("view") || "all"; // "all", "pending", "matches"
 
     const matchingService = OtcMatchingService.getInstance();
+    
+    // If specific matchId requested, return that match's details
+    if (matchId) {
+      const match = matchingService.getMatch(matchId);
+      if (!match) {
+        return NextResponse.json(
+          { error: "Match not found", matchId },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({
+        type: "match_detail",
+        matchId: match.matchId,
+        status: match.status,
+        matchedAt: match.matchedAt,
+        intentA: match.intentA,
+        intentB: match.intentB,
+        partyA: {
+          wallet: match.partyA.wallet,
+          sendAmount: match.partyA.sendAmount,
+          sendChain: match.partyA.sendChain,
+          receiveAmount: match.partyA.receiveAmount,
+          receiveChain: match.partyA.receiveChain,
+          signed: !!matchingService.getIntent(match.intentA)?.signature,
+          fundedToEscrow: !!match.partyA.fundedToEscrow,
+        },
+        partyB: {
+          wallet: match.partyB.wallet,
+          sendAmount: match.partyB.sendAmount,
+          sendChain: match.partyB.sendChain,
+          receiveAmount: match.partyB.receiveAmount,
+          receiveChain: match.partyB.receiveChain,
+          signed: !!matchingService.getIntent(match.intentB)?.signature,
+          fundedToEscrow: !!match.partyB.fundedToEscrow,
+        },
+        transactionHash: match.transactionHash,
+      });
+    }
     
     if (view === "pending") {
       // Show pending intents (order book)

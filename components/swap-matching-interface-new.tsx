@@ -60,6 +60,10 @@ export function SwapMatchingInterface({
   const [step, setStep] = useState<"waiting" | "signed" | "escrow_funding" | "escrow_funded" | "executing" | "executed">(
     "waiting"
   );
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false);
+  const [showTransactionHashScreen, setShowTransactionHashScreen] = useState(false);
+  const [hashCountdown, setHashCountdown] = useState<number | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
 
   // Fetch match details from API
   useEffect(() => {
@@ -70,8 +74,16 @@ export function SwapMatchingInterface({
         );
         const data = await response.json();
 
-        if (data.matches && data.matches.length > 0) {
-          const m = data.matches[0];
+        // Handle new API response format (type: "match_detail")
+        let m: MatchDetails | null = null;
+        
+        if (data.type === "match_detail") {
+          m = data as MatchDetails;
+        } else if (data.matches && data.matches.length > 0) {
+          m = data.matches[0];
+        }
+
+        if (m) {
           setMatch(m);
 
           // Determine current step based on match status
@@ -105,6 +117,46 @@ export function SwapMatchingInterface({
     }
   }, [matchId, walletAddress]);
 
+  // Sequential display: Hash → Success → Redirect
+  useEffect(() => {
+    if (match && match.status === "executed") {
+      // Phase 1: Show transaction hash for 10 seconds
+      setShowTransactionHashScreen(true);
+      let hashCountdownValue = 10;
+      setHashCountdown(hashCountdownValue);
+
+      const hashInterval = setInterval(() => {
+        hashCountdownValue -= 1;
+        setHashCountdown(hashCountdownValue);
+
+        if (hashCountdownValue <= 0) {
+          clearInterval(hashInterval);
+          // Phase 2: Show success screen
+          setShowTransactionHashScreen(false);
+          setShowSuccessScreen(true);
+
+          let successCountdownValue = 10;
+          setRedirectCountdown(successCountdownValue);
+
+          const successInterval = setInterval(() => {
+            successCountdownValue -= 1;
+            setRedirectCountdown(successCountdownValue);
+
+            if (successCountdownValue <= 0) {
+              clearInterval(successInterval);
+              // Phase 3: Redirect to OTC intent page
+              router.push(`/otc-intent?matchId=${matchId}`);
+            }
+          }, 1000);
+
+          return () => clearInterval(successInterval);
+        }
+      }, 1000);
+
+      return () => clearInterval(hashInterval);
+    }
+  }, [match?.status, matchId, router]);
+
   const isPartyA = walletAddress === match?.partyA.wallet;
   const currentParty = isPartyA ? match?.partyA : match?.partyB;
   const otherParty = isPartyA ? match?.partyB : match?.partyA;
@@ -131,21 +183,39 @@ export function SwapMatchingInterface({
             
             console.log("[SWAP-MATCH] Using sats-connect for BTC signature...");
             const messageToSign = `MATCH:${matchId.slice(0, 10)}`;
-            const response = await satsRequest('signMessage', {
+            const responseRaw = await satsRequest('signMessage', {
               address: walletAddress,
               message: messageToSign,
             });
+            const response: any = responseRaw;
             
-            const status = (response as { status?: string }).status;
-            if (status === 'success' && (response as any).result?.signature) {
-              signature = (response as any).result.signature;
+            console.log("[SWAP-MATCH] sats-connect response:", response);
+            
+            const status = (response as any)?.status;
+            const sig = (response as any)?.result?.signature || (response as any)?.signature;
+            
+            if (status === 'success' && sig) {
+              signature = sig;
               console.log("[SWAP-MATCH] BTC signature from sats-connect:", typeof signature);
+            } else if (!sig && !status) {
+              // Try treating response as signature directly
+              const directSig = String(response ?? "");
+              if (directSig.length > 10 && !directSig.startsWith("{")) {
+                signature = directSig;
+                console.log("[SWAP-MATCH] BTC signature from sats-connect (direct):", typeof signature);
+              } else {
+                const msg = JSON.stringify(response);
+                throw new Error(`sats-connect signing returned invalid response: ${msg}`);
+              }
             } else {
-              throw new Error("sats-connect signing failed");
+              const msg = JSON.stringify(response);
+              throw new Error(`sats-connect signing failed: ${msg}`);
             }
           } catch (satsError) {
+            const satsMsg = satsError instanceof Error ? satsError.message : String(satsError);
+            console.error("[SWAP-MATCH] sats-connect error:", satsMsg);
             throw new Error(
-              "Bitcoin wallet not connected. Please ensure Xverse or Unisat is installed, unlocked, and visible in your browser toolbar."
+              `Bitcoin signing failed: ${satsMsg}\n\nPlease ensure Xverse or Unisat is installed, unlocked, and visible.`
             );
           }
         } else {
@@ -259,28 +329,46 @@ export function SwapMatchingInterface({
             const { request: satsRequest } = await import('sats-connect');
             
             console.log("[ESCROW-FUND] Using sats-connect for BTC signature...");
-            const messageToSign = `OTC_ESCROW_FUND:${intentId}:${matchId}:${currentParty.sendAmount}:btc`;
-            const response = await satsRequest('signMessage', {
+            const messageToSign = `ESCROW:${matchId}:btc`;
+            const responseRaw = await satsRequest('signMessage', {
               address: walletAddress,
               message: messageToSign,
             });
+            const response: any = responseRaw;
             
-            const status = (response as { status?: string }).status;
-            if (status === 'success' && (response as any).result?.signature) {
-              signature = (response as any).result.signature;
+            console.log("[ESCROW-FUND] sats-connect response:", response);
+            
+            const status = (response as any)?.status;
+            const sig = (response as any)?.result?.signature || (response as any)?.signature;
+            
+            if (status === 'success' && sig) {
+              signature = sig;
               console.log("[ESCROW-FUND] BTC signature from sats-connect:", typeof signature);
+            } else if (!sig && !status) {
+              // Try treating response as signature directly
+              const directSig = String(response ?? "");
+              if (directSig.length > 10 && !directSig.startsWith("{")) {
+                signature = directSig;
+                console.log("[ESCROW-FUND] BTC signature from sats-connect (direct):", typeof signature);
+              } else {
+                const msg = JSON.stringify(response);
+                throw new Error(`sats-connect signing returned invalid response: ${msg}`);
+              }
             } else {
-              throw new Error("sats-connect signing failed");
+              const msg = JSON.stringify(response);
+              throw new Error(`sats-connect signing failed: ${msg}`);
             }
           } catch (satsError) {
+            const satsMsg = satsError instanceof Error ? satsError.message : String(satsError);
+            console.error("[ESCROW-FUND] sats-connect error:", satsMsg);
             throw new Error(
-              "Bitcoin wallet not connected. Please ensure Xverse or Unisat is installed, unlocked, and visible in your browser toolbar."
+              `Bitcoin signing failed: ${satsMsg}\n\nPlease ensure Xverse or Unisat is installed, unlocked, and visible.`
             );
           }
         } else {
           // Use direct provider
           console.log("[ESCROW-FUND] Using direct Bitcoin wallet provider for signature...");
-          const messageToSign = `OTC_ESCROW_FUND:${intentId}:${matchId}:${currentParty.sendAmount}:btc`;
+          const messageToSign = `ESCROW:${matchId}:btc`;
           try {
             signature = await bitcoinProvider.signMessage(messageToSign, "utf8");
             console.log("[ESCROW-FUND] BTC signature from Xverse/Unisat:", typeof signature);
@@ -300,7 +388,7 @@ export function SwapMatchingInterface({
           throw new Error("Starknet wallet not connected. Please open Argent X or Braavos.");
         }
 
-        const messageToSign = `OTC_ESCROW_FUND:${intentId}:${matchId}:${currentParty.sendAmount}:strk`;
+        const messageToSign = `ESCROW:${matchId}:strk`;
         console.log("[ESCROW-FUND] Using Starknet wallet for signature...");
         const messageHash = await starknet.account.signMessage({
           types: {
@@ -351,16 +439,28 @@ export function SwapMatchingInterface({
         throw new Error(fundData.error || "Failed to fund escrow");
       }
 
+      const fundingTxHash = fundData.fundingTxHash || fundData.escrowTxHash || fundData.transactionHash || "";
+      const swapExecuted = Boolean(fundData.swapExecuted || fundData.executed || fundData.matchStatus === "executed");
+      const swapInProgress = Boolean(
+        fundData.swapInProgress ||
+          fundData.matchStatus === "executing" ||
+          (!swapExecuted && fundData.fundingComplete)
+      );
+
       setSuccess(
         `✓ Your funds (${currentParty.sendAmount} ${currentParty.sendChain.toUpperCase()}) sent to escrow!\n` +
-        `Escrow TX: ${fundData.fundingTxHash.slice(0, 16)}...\n` +
-        (fundData.swapInProgress
-          ? "Atomic swap executing..."
-          : "Waiting for other party to fund...")
+        (fundingTxHash ? `Escrow TX: ${fundingTxHash.slice(0, 16)}...\n` : "") +
+        (swapExecuted
+          ? "Atomic swap executed successfully."
+          : swapInProgress
+            ? "Atomic swap executing..."
+            : "Waiting for other party to fund...")
       );
 
       // Check if swap auto-executed
-      if (fundData.swapInProgress) {
+      if (swapExecuted) {
+        setStep("executed");
+      } else if (swapInProgress) {
         setStep("executing");
       } else {
         setStep("escrow_funding");
@@ -372,7 +472,9 @@ export function SwapMatchingInterface({
           `/api/otc/matches?matchId=${matchId}&walletAddress=${encodeURIComponent(walletAddress)}`
         );
         const data = await res.json();
-        if (data.matches && data.matches.length > 0) {
+        if (data.type === "match_detail") {
+          setMatch(data);
+        } else if (data.matches && data.matches.length > 0) {
           setMatch(data.matches[0]);
         }
       }, 1000);
@@ -414,6 +516,43 @@ export function SwapMatchingInterface({
   return (
     <section className="container mx-auto px-4 py-12 md:py-16">
       <div className="mx-auto max-w-3xl">
+        {/* Status Banner for Executing/Executed States */}
+        {(match?.status === "executing" || match?.status === "executed") && (
+          <div className={`mb-6 rounded-xl border-2 px-6 py-4 ${
+            match.status === "executed"
+              ? "border-green-400 bg-gradient-to-r from-green-100 to-green-50"
+              : "border-blue-400 bg-gradient-to-r from-blue-100 to-blue-50 animate-pulse"
+          }`}>
+            <div className="flex items-center gap-3">
+              {match.status === "executing" ? (
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+              ) : (
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+              )}
+              <div>
+                <p className={`font-bold text-lg ${
+                  match.status === "executed"
+                    ? "text-green-900"
+                    : "text-blue-900"
+                }`}>
+                  {match.status === "executed"
+                    ? "✅ Atomic Swap Successfully Completed!"
+                    : "⏳ Processing Atomic Swap..."}
+                </p>
+                <p className={`text-sm ${
+                  match.status === "executed"
+                    ? "text-green-800"
+                    : "text-blue-800"
+                }`}>
+                  {match.status === "executed"
+                    ? "Your tokens have been exchanged and confirmed on-chain."
+                    : "Both escrows are funded. The atomic swap is executing..."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-3xl border-4 border-black bg-white p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
           {/* Status Header */}
           <div className="mb-8 text-center">
@@ -597,17 +736,140 @@ export function SwapMatchingInterface({
 
           {/* Action Buttons */}
           <div className="space-y-3">
-            {match.status === "executed" ? (
-              <div className="rounded-xl bg-green-100 px-6 py-4 text-center">
-                <p className="font-bold text-green-900">✓ Swap Executed Successfully!</p>
-                <p className="text-xs text-green-800 mt-1">
-                  Transaction: {match.transactionHash?.slice(0, 16)}...
-                </p>
+            {showTransactionHashScreen ? (
+              <div className="space-y-4">
+                <div className="rounded-xl bg-blue-100 px-6 py-8 text-center border-4 border-blue-500 animate-pulse">
+                  <p className="text-sm font-bold text-blue-900 mb-4">Processing Transaction...</p>
+                  <div className="bg-white rounded-lg p-6 mb-4 font-mono text-xs">
+                    <p className="text-gray-600 mb-2">Transaction Hash:</p>
+                    <p className="text-blue-700 font-bold break-all">{match?.transactionHash || 'Generating...'}</p>
+                  </div>
+                  <p className="text-lg font-bold text-blue-900">
+                    {hashCountdown}s
+                  </p>
+                  <p className="text-xs text-blue-800 mt-2">Confirming on-chain...</p>
+                </div>
+              </div>
+            ) : match.status === "executed" ? (
+              <div className="space-y-4">
+                <div className="rounded-xl bg-gradient-to-r from-green-100 to-green-50 px-6 py-6 text-center border-2 border-green-400">
+                  <div className="text-3xl mb-2">✅</div>
+                  <p className="font-bold text-lg text-green-900">Atomic Swap Completed Successfully!</p>
+                  <p className="text-sm text-green-800 mt-2 mb-4">Your tokens have been exchanged and confirmed on-chain.</p>
+                  
+                  {/* Transaction Details */}
+                  <div className="mt-4 bg-white rounded-lg p-4 text-left space-y-3">
+                    <div className="border-b border-green-200 pb-3">
+                      <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">Transaction Hash</p>
+                      <p className="text-xs text-gray-700 font-mono mt-1 break-all">{match.transactionHash || 'Processing...'}</p>
+                    </div>
+                    
+                    <div className="border-b border-green-200 pb-3">
+                      <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">You Sent</p>
+                      <p className="text-sm font-bold text-gray-900 mt-1">{currentParty?.sendAmount} {currentParty?.sendChain.toUpperCase()}</p>
+                    </div>
+                    
+                    <div className="border-b border-green-200 pb-3">
+                      <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">You Received</p>
+                      <p className="text-sm font-bold text-gray-900 mt-1">{currentParty?.receiveAmount} {currentParty?.receiveChain.toUpperCase()}</p>
+                    </div>
+                    
+                    {otherParty && (
+                      <div>
+                        <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">Other Party</p>
+                        <p className="text-xs text-gray-600 mt-1 break-all">{otherParty.wallet}</p>
+                        <p className="text-xs text-gray-600 mt-1">Sent: {otherParty.sendAmount} {otherParty.sendChain.toUpperCase()}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+                  <p className="text-xs text-blue-900">
+                    <span className="font-semibold">✨ What's Next?</span><br />
+                    Your tokens are now in your wallet. You can close this window or create another swap.
+                  </p>
+                </div>
               </div>
             ) : bothFunded ? (
-              <div className="rounded-xl bg-blue-100 px-6 py-4 text-center animate-pulse">
-                <p className="font-bold text-blue-900">⏳ Executing Atomic Swap...</p>
-                <p className="text-xs text-blue-800 mt-1">Both funds in escrow, processing exchange</p>
+              <div className="space-y-4">
+                {/* Success Screen with Details */}
+                <div className="rounded-xl bg-gradient-to-r from-green-100 to-green-50 px-6 py-8 text-center border-3 border-green-500">
+                  <div className="text-4xl mb-3 animate-bounce">✅</div>
+                  <p className="font-bold text-2xl text-green-900 mb-1">Atomic Swap Successful!</p>
+                  <p className="text-green-800 mb-6">Both parties have funded the escrow contract</p>
+                  
+                  {/* Transaction Details Box */}
+                  <div className="bg-white rounded-xl p-6 text-left space-y-4 mb-6 border-2 border-green-200">
+                    <div className="border-b border-green-200 pb-4">
+                      <p className="text-xs font-bold text-green-700 uppercase tracking-widest">Transaction Hash</p>
+                      <p className="text-sm text-gray-800 font-mono mt-2 break-all bg-gray-50 p-3 rounded">
+                        {match.transactionHash || `0x${Array(62).fill('0').join('')}`}
+                      </p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="border-r border-green-200 pr-4">
+                        <p className="text-xs font-bold text-green-700 uppercase tracking-widest">You Sent</p>
+                        <p className="text-lg font-bold text-gray-900 mt-2">{currentParty?.sendAmount}</p>
+                        <p className="text-sm text-green-700">{currentParty?.sendChain.toUpperCase()}</p>
+                      </div>
+                      
+                      <div className="pl-4">
+                        <p className="text-xs font-bold text-green-700 uppercase tracking-widest">You Received</p>
+                        <p className="text-lg font-bold text-gray-900 mt-2">{currentParty?.receiveAmount}</p>
+                        <p className="text-sm text-green-700">{currentParty?.receiveChain.toUpperCase()}</p>
+                      </div>
+                    </div>
+                    
+                    {otherParty && (
+                      <div className="border-t border-green-200 pt-4 mt-4">
+                        <p className="text-xs font-bold text-green-700 uppercase tracking-widest">Counterparty</p>
+                        <p className="text-xs text-gray-600 mt-2 break-all">{otherParty.wallet}</p>
+                        <p className="text-sm text-gray-700 mt-3">
+                          Sent <span className="font-bold">{otherParty.sendAmount} {otherParty.sendChain.toUpperCase()}</span> to escrow
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Redirect Info */}
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-300">
+                    <p className="text-sm text-green-900">
+                      <span className="font-semibold">🎉 Returning to Order Book</span>
+                      {redirectCountdown !== null && (
+                        <span className="block mt-2 text-green-700">
+                          in <span className="font-bold text-lg">{redirectCountdown}</span> seconds
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  
+                  {/* Back Button */}
+                  <button
+                    onClick={() => router.push(`/otc-intent?matchId=${matchId}`)}
+                    className="mt-6 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                  >
+                    Return to OTC Trading
+                  </button>
+                </div>
+              </div>
+            ) : currentParty?.fundedToEscrow && !bothFunded ? (
+              <div className="space-y-4">
+                <div className="rounded-xl bg-green-100 px-6 py-6 text-center border-2 border-green-400">
+                  <div className="text-3xl mb-2">✅</div>
+                  <p className="font-bold text-lg text-green-900">Your Escrow Funded Successfully!</p>
+                  <p className="text-sm text-green-800 mt-2">
+                    You've locked {currentParty?.sendAmount} {currentParty?.sendChain.toUpperCase()} in escrow
+                  </p>
+                </div>
+                
+                <div className="rounded-lg bg-yellow-50 border-2 border-yellow-300 p-4">
+                  <p className="text-sm text-yellow-900">
+                    <span className="font-semibold">⏳ Waiting for counter-party</span><br />
+                    {otherParty?.wallet.slice(0, 10)}... needs to fund their {otherParty?.sendAmount} {otherParty?.sendChain.toUpperCase()} escrow to proceed.
+                  </p>
+                </div>
               </div>
             ) : bothSigned && !currentParty?.fundedToEscrow ? (
               <button
